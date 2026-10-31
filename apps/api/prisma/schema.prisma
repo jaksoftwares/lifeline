@@ -1,0 +1,164 @@
+// Lifeline database schema. Phase 0: identity, institutions, memberships, sessions and audit.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InstitutionType {
+  FACILITY
+  AMBULANCE_PROVIDER
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+// Mirrors ROLES in @lifeline/domain.
+enum Role {
+  REFERRING_CLINICIAN
+  REFERRAL_COORDINATOR
+  RECEIVING_DECISION_MAKER
+  FACILITY_ADMIN
+  DISPATCHER
+  AMBULANCE_CREW
+  PROVIDER_ADMIN
+  NETWORK_OPERATIONS
+  NETWORK_ADMIN
+  AUDITOR
+}
+
+/// A referral network, e.g. a county or a referral hospital and its feeder facilities. The tenant boundary.
+model Network {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  institutions Institution[]
+  memberships  Membership[]
+  auditEvents  AuditEvent[]
+}
+
+/// A healthcare facility or an ambulance provider participating in a network.
+model Institution {
+  id        String          @id @default(cuid())
+  networkId String
+  network   Network         @relation(fields: [networkId], references: [id])
+  type      InstitutionType
+  name      String
+  code      String
+  /// KEPH level (1–6) for facilities; null for ambulance providers.
+  level     Int?
+  county    String?
+  status    RecordStatus    @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  memberships Membership[]
+  auditEvents AuditEvent[]
+
+  @@unique([networkId, code])
+  @@index([networkId, type])
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  fullName           String
+  phone              String?
+  passwordHash       String
+  mustChangePassword Boolean    @default(true)
+  passwordChangedAt  DateTime?
+  status             UserStatus @default(ACTIVE)
+
+  mfaEnabled       Boolean @default(false)
+  /// AES-256-GCM encrypted TOTP secret.
+  mfaSecret        String?
+  /// Encrypted secret awaiting confirmation during enrolment.
+  mfaPendingSecret String?
+  /// Last accepted TOTP time step; codes at or before it are rejected to stop replay.
+  mfaLastUsedStep  Int?
+
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  memberships Membership[] @relation("member")
+  grantedMemberships Membership[] @relation("grantedBy")
+  sessions    Session[]
+  auditEvents AuditEvent[]
+}
+
+/// A role held by a user, either at one institution or (institutionId null) across a network.
+model Membership {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation("member", fields: [userId], references: [id], onDelete: Cascade)
+  networkId     String
+  network       Network      @relation(fields: [networkId], references: [id])
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  role          Role
+  grantedById   String?
+  grantedBy     User?        @relation("grantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  // Postgres treats NULLs as distinct, so duplicate network-wide roles are also checked in the service.
+  @@unique([userId, networkId, institutionId, role])
+  @@index([networkId, institutionId])
+}
+
+/// A signed-in device. The refresh token is `<session id>.<secret>`; only a hash of the secret is stored.
+model Session {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshHash         String
+  previousRefreshHash String?
+  rotatedAt           DateTime?
+  expiresAt           DateTime
+  lastUsedAt          DateTime  @default(now())
+  revokedAt           DateTime?
+  revokedReason       String?
+  userAgent           String?
+  ipAddress           String?
+  createdAt           DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Append-only record of security and administrative actions. Updates and deletes are blocked by a trigger.
+model AuditEvent {
+  id            String       @id @default(cuid())
+  occurredAt    DateTime     @default(now())
+  action        String
+  actorId       String?
+  actor         User?        @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  networkId     String?
+  network       Network?     @relation(fields: [networkId], references: [id], onDelete: Restrict)
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  entityType    String
+  entityId      String?
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json         @default("{}")
+
+  @@index([networkId, occurredAt])
+  @@index([institutionId, occurredAt])
+  @@index([actorId, occurredAt])
+}

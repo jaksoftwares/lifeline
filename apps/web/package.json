@@ -1,0 +1,32 @@
+{
+  "name": "@lifeline/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit --incremental false"
+  },
+  "dependencies": {
+    "@lifeline/domain": "workspace:*",
+    "@lifeline/schemas": "workspace:*",
+    "@lifeline/tokens": "workspace:*",
+    "@lifeline/ui": "workspace:*",
+    "@tanstack/react-query": "5.104.4",
+    "lucide-react": "1.59.0",
+    "next": "15.5.28",
+    "react": "19.2.9",
+    "react-dom": "19.2.9"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "24.19.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "postcss": "8.5.30",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3"
+  }
+}
