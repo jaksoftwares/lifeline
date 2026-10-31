@@ -107,6 +107,7 @@ export async function demoIds(app: INestApplication) {
     north: byCode('DSCH-N'),
     south: byCode('DSCH-S'),
     ambulance: byCode('DAS'),
+    institution: byCode,
     service: (code: string) => services.find((s) => s.code === code)!.id,
     resource: (code: string) => resources.find((r) => r.code === code)!.id,
   };

@@ -1,5 +1,5 @@
 /**
- * Referral lifecycle (Phase 2). Transfer states (ambulance assigned, collected, …) follow in Phase 3+.
+ * Referral lifecycle (Phase 2). Transfer states (ambulance assigned, collected, …) are in transport.ts.
  *
  * A referral is sent as one request per receiving facility. Each facility answers its own request; the
  * first acceptance decides the destination and withdraws the others.

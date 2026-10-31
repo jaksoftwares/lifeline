@@ -8,14 +8,14 @@ import { useSession } from '@/lib/session';
 
 const UPCOMING = [
   {
-    phase: 3,
-    name: 'Ambulances and dispatch',
-    detail: 'Fleet, crews, capability levels and confirmed assignments.',
-  },
-  {
     phase: 4,
     name: 'Crew mobile app',
     detail: 'Trip status updates and location sharing, including offline.',
+  },
+  {
+    phase: 5,
+    name: 'Live tracking',
+    detail: 'Ambulance positions and arrival estimates shared with both facilities.',
   },
 ];
 
@@ -77,6 +77,22 @@ export default function OverviewPage() {
                 href="/capacity"
               >
                 Report your facility’s capacity
+              </Link>
+            )}
+            {(can('transport:request') || can('dispatch:assign')) && (
+              <Link
+                className="block text-teal-deep underline-offset-2 hover:underline"
+                href="/transfers"
+              >
+                Transfers and ambulances
+              </Link>
+            )}
+            {can('dispatch:assign') && (
+              <Link
+                className="block text-teal-deep underline-offset-2 hover:underline"
+                href="/fleet"
+              >
+                Confirm vehicle availability
               </Link>
             )}
             {can('users:manage') && (

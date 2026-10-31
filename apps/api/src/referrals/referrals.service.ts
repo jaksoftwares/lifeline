@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  hasPermission,
   isOpenRequest,
   MAX_RECEIVING_FACILITIES,
   OPEN_REQUEST_STATUSES,
@@ -47,6 +48,7 @@ import {
   referralAccess,
 } from './referral-access';
 import { nextReferralReference, recordReferralEvent } from './referral-records';
+import { cancelOpenTransfer } from '../transport/transfer-records';
 
 const VIEW_AUDIT_INTERVAL_MS = 15 * 60 * 1000;
 const LIST_LIMIT = 100;
@@ -324,6 +326,14 @@ export class ReferralsService {
         where: { referralId, status: { in: [...OPEN_REQUEST_STATUSES] } },
         data: { status: 'WITHDRAWN', withdrawnAt: now, withdrawReason: 'Referral cancelled' },
       });
+      // Any ambulance offered or on its way is stood down; refused once the patient is collected.
+      await cancelOpenTransfer(tx, {
+        referralId,
+        actorId: auth.userId,
+        institutionId: referral.referringInstitutionId,
+        reason: `Referral cancelled: ${reason}`,
+        at: now,
+      });
       await recordReferralEvent(tx, {
         referralId,
         type: 'CANCELLED',
@@ -414,6 +424,7 @@ export class ReferralsService {
           orderBy: { occurredAt: 'asc' },
           include: { actor: person, institution: { select: { id: true, name: true } } },
         },
+        transfers: { where: { status: { not: 'CANCELLED' } }, select: { id: true } },
       },
     });
     if (!referral) throw new NotFoundException('Referral not found.');
@@ -500,7 +511,12 @@ export class ReferralsService {
                 pregnancyStatus: referral.pregnancyStatus,
               }),
       },
+      transferId: referral.transfers[0]?.id ?? null,
       viewer: {
+        canArrangeTransport: hasPermission(auth.grants, 'transport:request', {
+          networkId: referral.networkId,
+          institutionId: referral.referringInstitutionId,
+        }),
         isReferrer: access.isReferrer,
         respondableRequestIds: access.respondableRequestIds.filter((id) =>
           visibleRequestIds.has(id),

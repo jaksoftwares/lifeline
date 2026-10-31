@@ -319,7 +319,11 @@ export interface ReferralDetail {
   requests: RequestView[];
   events: ReferralEventView[];
   scoring: { score: EarlyWarningScore; notApplicableReason: string | null };
+  /** The current (not cancelled) transfer, once transport has been requested. */
+  transferId: string | null;
   viewer: {
+    /** Can request and arrange transport once the referral is accepted. */
+    canArrangeTransport: boolean;
     /** The viewer can act for the referring facility (edit draft, submit, withdraw, cancel). */
     isReferrer: boolean;
     /** Requests the viewer can answer for their facility. */

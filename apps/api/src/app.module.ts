@@ -20,6 +20,11 @@ import { AttachmentsService } from './referrals/attachments.service';
 import { ReferralsController } from './referrals/referrals.controller';
 import { ReferralsService } from './referrals/referrals.service';
 import { ResponsesService } from './referrals/responses.service';
+import { DispatchService } from './transport/dispatch.service';
+import { FleetController } from './transport/fleet.controller';
+import { FleetService } from './transport/fleet.service';
+import { TransfersController } from './transport/transfers.controller';
+import { TransfersService } from './transport/transfers.service';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
 
@@ -38,6 +43,8 @@ import { UsersService } from './users/users.service';
     InstitutionsController,
     FacilitiesController,
     ReferralsController,
+    FleetController,
+    TransfersController,
     AuditController,
     HealthController,
   ],
@@ -54,6 +61,9 @@ import { UsersService } from './users/users.service';
     ResponsesService,
     AssessmentsService,
     AttachmentsService,
+    FleetService,
+    TransfersService,
+    DispatchService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

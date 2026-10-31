@@ -19,11 +19,11 @@ export const kenyanPhoneNumberSchema = z
   .regex(/^\+254\d{9}$/, 'Enter the number in the format +254XXXXXXXXX.');
 
 // Rough bounding box of Kenya; catches swapped latitude/longitude and typos.
-const latitudeSchema = z
+export const latitudeSchema = z
   .number()
   .min(-4.9, 'Location must be within Kenya.')
   .max(5.1, 'Location must be within Kenya.');
-const longitudeSchema = z
+export const longitudeSchema = z
   .number()
   .min(33.9, 'Location must be within Kenya.')
   .max(42, 'Location must be within Kenya.');

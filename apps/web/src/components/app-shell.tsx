@@ -4,6 +4,7 @@ import { type Permission } from '@lifeline/domain';
 import { cn, Logo, Select } from '@lifeline/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  Ambulance,
   BedDouble,
   Building2,
   ClipboardList,
@@ -14,6 +15,7 @@ import {
   UserCog,
   Users,
   X,
+  Truck,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -26,14 +28,21 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  /** Shown only when the user holds this permission in the active network. */
-  permission?: Permission;
+  /** Shown only when the user holds one of these permissions in the active network. */
+  permission?: Permission | Permission[];
 }
 
-// Modules from later phases (Referrals, Dispatch, Live transfers, …) are added here as they ship.
+// Modules from later phases (crew app, live tracking, reports, …) are added here as they ship.
 const NAV: NavItem[] = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/referrals', label: 'Referrals', icon: FileHeart, permission: 'referral:view' },
+  {
+    href: '/transfers',
+    label: 'Transfers',
+    icon: Ambulance,
+    permission: ['transport:request', 'dispatch:assign', 'fleet:view', 'transfers:monitor'],
+  },
+  { href: '/fleet', label: 'Fleet', icon: Truck, permission: ['fleet:view', 'dispatch:assign'] },
   { href: '/network', label: 'Facility network', icon: Building2 },
   { href: '/capacity', label: 'Capacity', icon: BedDouble, permission: 'capacity:update' },
   { href: '/admin/users', label: 'Users and roles', icon: Users, permission: 'users:manage' },
@@ -46,7 +55,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
-  const items = NAV.filter((item) => !item.permission || can(item.permission));
+  const items = NAV.filter(
+    (item) => !item.permission || [item.permission].flat().some((p) => can(p)),
+  );
 
   async function signOut() {
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
@@ -100,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="border-t border-white/10 px-5 py-4 text-xs text-white/60">
-          Phase 2 · Referrals
+          Phase 3 · Ambulances and dispatch
         </div>
       </aside>
 

@@ -101,6 +101,8 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     requiresMfa: false,
     permissions: [
       'referral:view',
+      // Operations teams arrange transport when a facility can't, e.g. no suitable vehicle is free.
+      'transport:request',
       'transfers:monitor',
       'escalation:manage',
       'fleet:view',

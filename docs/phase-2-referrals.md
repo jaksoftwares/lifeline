@@ -64,4 +64,4 @@
 3. **Obstetric (MEOWS) and paediatric (PEWS) charts**, once clinical governance chooses which versions to use.
 4. **Patient matching** across referrals (the same patient referred twice) is not attempted; each referral creates its own patient record.
 5. **Back-referral** to the original facility after treatment, as noted in the plan.
-6. Transport arrangements begin in Phase 3; accepted referrals currently show "Transport arrangements are added in the next release".
+6. Transport arrangements: done in Phase 3 (see [phase-3-ambulances-dispatch.md](phase-3-ambulances-dispatch.md)).

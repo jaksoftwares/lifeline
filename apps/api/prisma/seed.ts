@@ -3,13 +3,21 @@
  * All names are fictional. Never run against production.
  */
 import { existsSync } from 'node:fs';
-import { calculateScore, DEFAULT_RESOURCES, DEFAULT_SERVICES } from '@lifeline/domain';
+import {
+  calculateScore,
+  DEFAULT_RESOURCES,
+  DEFAULT_SERVICES,
+  type EquipmentCode,
+} from '@lifeline/domain';
 import {
   type AvailabilityStatus,
+  type CapabilityLevel,
+  type CrewQualification,
   type InstitutionType,
   type Ownership,
   PrismaClient,
   type Role,
+  type VehicleStatus,
 } from '@prisma/client';
 import { hashPassword } from '../src/auth/passwords';
 
@@ -191,6 +199,18 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
     latitude: -1.286,
     longitude: 36.817,
   },
+  {
+    code: 'DCAS',
+    name: 'Demo County Ambulance Service',
+    type: 'AMBULANCE_PROVIDER',
+    level: null,
+    county: 'Kiambu',
+    ownership: 'PUBLIC',
+    address: 'Demo County Garage, Kiambu',
+    phone: '+254700000198',
+    latitude: -1.168,
+    longitude: 36.829,
+  },
 ];
 
 /** institution: null means a network-wide role. */
@@ -278,6 +298,115 @@ export const DEMO_USERS: {
     role: 'RECEIVING_DECISION_MAKER',
     institution: 'DCRH-W',
   },
+  {
+    email: 'dispatcher.county@demo.lifeline.test',
+    fullName: 'Rose Chebet',
+    role: 'DISPATCHER',
+    institution: 'DCAS',
+  },
+];
+
+const ALS_KIT: EquipmentCode[] = [
+  'OXYGEN',
+  'SUCTION',
+  'CARDIAC_MONITOR',
+  'DEFIBRILLATOR',
+  'INFUSION_PUMP',
+  'SPINAL_IMMOBILISATION',
+];
+
+/**
+ * Vehicles in different states so the matching rules can be seen: available, out of service, off
+ * duty, and one whose availability is out of date. Minutes are before seeding; null means never set.
+ */
+export const DEMO_VEHICLES: {
+  provider: string;
+  registration: string;
+  callSign: string;
+  capability: CapabilityLevel;
+  equipment: EquipmentCode[];
+  status: VehicleStatus;
+  statusMinutesAgo: number | null;
+  statusNote?: string;
+  base?: [string, number, number];
+}[] = [
+  {
+    provider: 'DAS',
+    registration: 'KDA 101A',
+    callSign: 'DAS-1',
+    capability: 'ALS',
+    equipment: ALS_KIT,
+    status: 'AVAILABLE',
+    statusMinutesAgo: 40,
+    base: ['Thika Road station', -1.105, 36.905],
+  },
+  {
+    provider: 'DAS',
+    registration: 'KDA 102B',
+    callSign: 'DAS-2',
+    capability: 'CRITICAL_CARE',
+    equipment: [...ALS_KIT, 'VENTILATOR', 'INCUBATOR'],
+    status: 'AVAILABLE',
+    statusMinutesAgo: 120,
+  },
+  {
+    provider: 'DAS',
+    registration: 'KDA 103C',
+    callSign: 'DAS-3',
+    capability: 'BLS',
+    equipment: ['OXYGEN', 'SUCTION', 'SPINAL_IMMOBILISATION'],
+    status: 'OUT_OF_SERVICE',
+    statusMinutesAgo: 180,
+    statusNote: 'Gearbox repair, back tomorrow',
+  },
+  {
+    provider: 'DAS',
+    registration: 'KDA 104D',
+    callSign: 'DAS-4',
+    capability: 'ALS',
+    equipment: ALS_KIT,
+    status: 'AVAILABLE',
+    statusMinutesAgo: 16 * 60,
+  },
+  {
+    provider: 'DCAS',
+    registration: 'GKB 201A',
+    callSign: 'KIAMBU-1',
+    capability: 'BLS',
+    equipment: ['OXYGEN', 'SUCTION', 'SPINAL_IMMOBILISATION'],
+    status: 'AVAILABLE',
+    statusMinutesAgo: 20,
+    base: ['Gatundu sub-county garage', -1.01, 36.91],
+  },
+  {
+    provider: 'DCAS',
+    registration: 'GKB 202B',
+    callSign: 'KIAMBU-2',
+    capability: 'PATIENT_TRANSPORT',
+    equipment: [],
+    status: 'AVAILABLE',
+    statusMinutesAgo: 60,
+  },
+  {
+    provider: 'DCAS',
+    registration: 'GKB 203C',
+    callSign: 'KIAMBU-3',
+    capability: 'BLS',
+    equipment: ['OXYGEN', 'SUCTION'],
+    status: 'OFF_DUTY',
+    statusMinutesAgo: 300,
+  },
+];
+
+/** [provider, name, qualification, linked account email] */
+const DEMO_CREW: [string, string, CrewQualification, string?][] = [
+  ['DAS', 'Kevin Ochieng', 'PARAMEDIC', 'crew@demo.lifeline.test'],
+  ['DAS', 'Mary Atieno', 'NURSE'],
+  ['DAS', 'James Kibet', 'EMT'],
+  ['DAS', 'Ali Hassan', 'DRIVER'],
+  ['DAS', 'John Mutiso', 'DRIVER'],
+  ['DCAS', 'Agnes Moraa', 'EMT'],
+  ['DCAS', 'Tom Wekesa', 'DRIVER'],
 ];
 
 export async function seed(prisma: PrismaClient, demoPassword: string): Promise<void> {
@@ -345,6 +474,159 @@ export async function seed(prisma: PrismaClient, demoPassword: string): Promise<
 
   await seedFacilityDetails(prisma, institutionIds, serviceIds, resourceIds);
   await seedDemoReferral(prisma, network.id, institutionIds, serviceIds);
+  await seedFleet(prisma, network.id, institutionIds);
+  await seedAcceptedReferral(prisma, network.id, institutionIds, serviceIds);
+}
+
+/** Vehicles and crew for both demo providers. Each vehicle and each provider's crew is added once. */
+async function seedFleet(
+  prisma: PrismaClient,
+  networkId: string,
+  institutionIds: Map<string, string>,
+): Promise<void> {
+  const dispatchers = new Map<string, string>();
+  for (const demo of DEMO_USERS.filter((u) => u.role === 'DISPATCHER' && u.institution)) {
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: demo.email } });
+    dispatchers.set(demo.institution!, user.id);
+  }
+
+  for (const v of DEMO_VEHICLES) {
+    const exists = await prisma.vehicle.findUnique({
+      where: { networkId_registration: { networkId, registration: v.registration } },
+    });
+    if (exists) continue;
+    await prisma.vehicle.create({
+      data: {
+        networkId,
+        institutionId: institutionIds.get(v.provider)!,
+        registration: v.registration,
+        callSign: v.callSign,
+        capability: v.capability,
+        equipment: v.equipment,
+        status: v.status,
+        statusNote: v.statusNote ?? null,
+        statusUpdatedAt:
+          v.statusMinutesAgo === null ? null : new Date(Date.now() - v.statusMinutesAgo * 60_000),
+        statusUpdatedById: v.statusMinutesAgo === null ? null : dispatchers.get(v.provider),
+        baseName: v.base?.[0] ?? null,
+        baseLatitude: v.base?.[1] ?? null,
+        baseLongitude: v.base?.[2] ?? null,
+      },
+    });
+  }
+
+  for (const provider of new Set(DEMO_CREW.map(([p]) => p))) {
+    const institutionId = institutionIds.get(provider)!;
+    if ((await prisma.crewMember.count({ where: { institutionId } })) > 0) continue;
+    for (const [, fullName, qualification, email] of DEMO_CREW.filter(([p]) => p === provider)) {
+      const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
+      await prisma.crewMember.create({
+        data: { institutionId, fullName, qualification, userId: user?.id ?? null },
+      });
+    }
+  }
+}
+
+const ACCEPTED_PATIENT = 'Wanjiku Njoki Kamau';
+
+/**
+ * A referral already accepted by the East hospital, so transport can be arranged straight away in a
+ * fresh demo. Added once.
+ */
+async function seedAcceptedReferral(
+  prisma: PrismaClient,
+  networkId: string,
+  institutionIds: Map<string, string>,
+  serviceIds: Map<string, string>,
+): Promise<void> {
+  if (await prisma.patient.findFirst({ where: { networkId, fullName: ACCEPTED_PATIENT } })) return;
+  const clinician = await prisma.user.findUniqueOrThrow({
+    where: { email: 'clinician.north@demo.lifeline.test' },
+  });
+  const decider = await prisma.user.findUniqueOrThrow({
+    where: { email: 'receiving.east@demo.lifeline.test' },
+  });
+  const north = institutionIds.get('DSCH-N')!;
+  const east = institutionIds.get('DCRH-E')!;
+  const sentAt = new Date(Date.now() - 45 * 60_000);
+  const acceptedAt = new Date(Date.now() - 15 * 60_000);
+  const maternity = await prisma.department.findFirst({
+    where: { institutionId: east, name: 'Maternity' },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    const seq = await tx.network.update({
+      where: { id: networkId },
+      data: { referralSequence: { increment: 1 } },
+    });
+    const patient = await tx.patient.create({
+      data: {
+        networkId,
+        fullName: ACCEPTED_PATIENT,
+        sex: 'FEMALE',
+        estimatedAge: 27,
+        estimatedAgeUnit: 'YEARS',
+      },
+    });
+    const referral = await tx.referral.create({
+      data: {
+        networkId,
+        reference: `${seq.code}-${String(sentAt.getUTCFullYear()).slice(-2)}-${String(seq.referralSequence).padStart(5, '0')}`,
+        status: 'ACCEPTED',
+        urgency: 'URGENT',
+        referringInstitutionId: north,
+        createdById: clinician.id,
+        patientId: patient.id,
+        pregnancyStatus: 'PREGNANT',
+        gestationWeeks: 39,
+        reason: 'Obstructed labour; needs caesarean section. Our obstetrician is on leave.',
+        clinicalSummary:
+          'Primigravida in labour for 16 hours, cervix 7 cm for 5 hours despite good contractions. Fetal heart 150 and regular. Vital signs stable.',
+        provisionalDiagnosis: 'Obstructed labour, cephalopelvic disproportion',
+        treatmentGiven: 'IV Ringer’s lactate, urinary catheter, ceftriaxone 1 g IV.',
+        allergies: 'None known',
+        submittedAt: sentAt,
+        acceptedAt,
+        createdAt: new Date(sentAt.getTime() - 10 * 60_000),
+        requiredServices: { create: [{ serviceId: serviceIds.get('CEMONC')! }] },
+        requests: {
+          create: {
+            institutionId: east,
+            sentById: clinician.id,
+            sentAt,
+            status: 'ACCEPTED',
+            respondedAt: acceptedAt,
+            respondedById: decider.id,
+            responseNote: 'Theatre is ready. Please call the maternity unit on departure.',
+            receivingDepartmentId: maternity?.id ?? null,
+          },
+        },
+      },
+      include: { requests: true },
+    });
+    const requestId = referral.requests[0]!.id;
+    await tx.referral.update({
+      where: { id: referral.id },
+      data: { acceptedRequestId: requestId },
+    });
+    const events = [
+      { type: 'CREATED' as const, institutionId: north, occurredAt: referral.createdAt },
+      { type: 'SUBMITTED' as const, institutionId: north, occurredAt: sentAt },
+      { type: 'REQUEST_SENT' as const, institutionId: east, requestId, occurredAt: sentAt },
+      {
+        type: 'ACCEPTED' as const,
+        institutionId: east,
+        requestId,
+        occurredAt: acceptedAt,
+        actorId: decider.id,
+      },
+    ];
+    for (const event of events) {
+      await tx.referralEvent.create({
+        data: { referralId: referral.id, actorId: clinician.id, ...event },
+      });
+    }
+  });
 }
 
 /** One referral waiting at the national hospital, so the inboxes aren't empty in a fresh demo. Added once. */

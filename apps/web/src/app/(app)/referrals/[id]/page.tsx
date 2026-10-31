@@ -10,6 +10,8 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { PageHeader } from '@/components/app-shell';
 import { ReferralStatusChip, UrgencyChip } from '@/components/referral-chips';
+import { RequestTransportForm } from '@/components/transfer/request-transport-form';
+import { TransferPanel } from '@/components/transfer/transfer-panel';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useReferral } from '@/lib/queries';
@@ -65,6 +67,7 @@ export default function ReferralPage() {
 
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="space-y-6 xl:col-span-2">
+            {r.transferId && <TransferPanel transferId={r.transferId} />}
             <ClinicalDetails referral={r} />
             <Observations referral={r} />
             {r.requests.length > 0 && (
@@ -149,11 +152,24 @@ function NextStep({ referral: r }: { referral: ReferralDetail }) {
   }
   if (r.status === 'ACCEPTED' && accepted) {
     return (
-      <Alert tone="success" title={`Accepted by ${accepted.institution.name}`}>
-        {accepted.receivingDepartment && `${accepted.receivingDepartment.name}. `}
-        {accepted.readyAt && `Ready from ${formatDateTime(accepted.readyAt)}. `}
-        Transport arrangements are added in the next release.
-      </Alert>
+      <>
+        <Alert tone="success" title={`Accepted by ${accepted.institution.name}`}>
+          {accepted.receivingDepartment && `${accepted.receivingDepartment.name}. `}
+          {accepted.readyAt && `Ready from ${formatDateTime(accepted.readyAt)}. `}
+          {!r.transferId &&
+            (r.viewer.canArrangeTransport
+              ? 'Arrange transport below.'
+              : 'The referring facility arranges transport.')}
+        </Alert>
+        {!r.transferId && r.viewer.canArrangeTransport && (
+          <ActionCard
+            title="Arrange transport"
+            description="Say what care the patient needs on the way. Lifeline then suggests suitable ambulances."
+          >
+            <RequestTransportForm referral={r} />
+          </ActionCard>
+        )}
+      </>
     );
   }
   if (r.status === 'SUBMITTED' && r.viewer.isReferrer) {

@@ -75,6 +75,23 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'referral.message_sent': 'Referral message sent',
   'referral.attachment_added': 'Document attached',
   'referral.attachment_downloaded': 'Document downloaded',
+  'transfer.requested': 'Transport requested',
+  'transfer.updated': 'Transport needs changed',
+  'transfer.offered': 'Transfer offered to a vehicle',
+  'transfer.offer_withdrawn': 'Transfer offer withdrawn',
+  'transfer.confirmed': 'Ambulance confirmed',
+  'transfer.declined': 'Transfer declined by provider',
+  'transfer.reassigned': 'Ambulance or crew changed',
+  'transfer.released': 'Transfer released by provider',
+  'transfer.external_arranged': 'Transport arranged outside Lifeline',
+  'transfer.dispatched': 'Ambulance dispatched',
+  'transfer.cancelled': 'Transfer cancelled',
+  'transfer.viewed': 'Transfer opened',
+  'vehicle.created': 'Vehicle registered',
+  'vehicle.updated': 'Vehicle details changed',
+  'vehicle.status_updated': 'Vehicle availability updated',
+  'crew.created': 'Crew member added',
+  'crew.updated': 'Crew member changed',
 };
 
 export function auditActionLabel(action: string): string {

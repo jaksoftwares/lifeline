@@ -2,6 +2,7 @@
 // Phase 0: identity, institutions, memberships, sessions and audit.
 // Phase 1: facility profiles, service and capacity catalogue, departments, capacity reporting.
 // Phase 2: patients, referrals, per-facility requests, messages, clinical assessments, attachments.
+// Phase 3: vehicles, crew, transfers, dispatch assignments and transfer history.
 
 generator client {
   provider = "prisma-client-js"
@@ -137,6 +138,84 @@ enum ReferralEventType {
   ATTACHMENT_ADDED
 }
 
+enum CapabilityLevel {
+  PATIENT_TRANSPORT
+  BLS
+  ALS
+  CRITICAL_CARE
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  OUT_OF_SERVICE
+  OFF_DUTY
+}
+
+enum CrewQualification {
+  DRIVER
+  EMT
+  PARAMEDIC
+  NURSE
+  CLINICAL_OFFICER
+  DOCTOR
+}
+
+enum TransferStatus {
+  AWAITING_TRANSPORT
+  AMBULANCE_ASSIGNED
+  DISPATCHED
+  AT_PICKUP
+  PATIENT_COLLECTED
+  IN_TRANSIT
+  ARRIVED
+  HANDED_OVER
+  COMPLETED
+  INTERRUPTED
+  CANCELLED
+}
+
+enum AssignmentKind {
+  PROVIDER
+  EXTERNAL
+}
+
+enum AssignmentStatus {
+  PROPOSED
+  CONFIRMED
+  DECLINED
+  WITHDRAWN
+  RELEASED
+  COMPLETED
+}
+
+enum AssignmentDeclineReason {
+  NO_VEHICLE
+  NO_CREW
+  VEHICLE_UNSUITABLE
+  TOO_FAR
+  OTHER
+}
+
+enum ExternalTransportService {
+  NATIONAL_922
+  COUNTY_AMBULANCE
+  OTHER
+}
+
+enum TransferEventType {
+  REQUESTED
+  UPDATED
+  OFFERED
+  OFFER_WITHDRAWN
+  CONFIRMED
+  DECLINED
+  REASSIGNED
+  RELEASED
+  EXTERNAL_ARRANGED
+  DISPATCHED
+  CANCELLED
+}
+
 enum Role {
   REFERRING_CLINICIAN
   REFERRAL_COORDINATOR
@@ -152,17 +231,19 @@ enum Role {
 
 /// A referral network, e.g. a county or a referral hospital and its feeder facilities. The tenant boundary.
 model Network {
-  id                        String            @id @default(cuid())
-  code                      String            @unique
-  name                      String
+  id                             String            @id @default(cuid())
+  code                           String            @unique
+  name                           String
   /// Capacity reports older than this are shown as stale.
-  capacityStaleAfterMinutes Int               @default(240)
+  capacityStaleAfterMinutes      Int               @default(240)
   /// Early-warning score shown on referrals. NONE until clinical governance approves one.
-  earlyWarningScore         EarlyWarningScore @default(NONE)
+  earlyWarningScore              EarlyWarningScore @default(NONE)
   /// Last issued referral number, for human-readable references.
-  referralSequence          Int               @default(0)
-  createdAt                 DateTime          @default(now())
-  updatedAt                 DateTime          @updatedAt
+  referralSequence               Int               @default(0)
+  /// Vehicles whose availability hasn't been confirmed for longer than this are not suggested.
+  vehicleStatusStaleAfterMinutes Int               @default(720)
+  createdAt                      DateTime          @default(now())
+  updatedAt                      DateTime          @updatedAt
 
   institutions Institution[]
   memberships  Membership[]
@@ -171,6 +252,8 @@ model Network {
   resources    CapacityResource[]
   patients     Patient[]
   referrals    Referral[]
+  vehicles     Vehicle[]
+  transfers    Transfer[]
 }
 
 /// A healthcare facility or an ambulance provider participating in a network.
@@ -206,6 +289,13 @@ model Institution {
   referralMessages    ReferralMessage[]
   referralEvents      ReferralEvent[]
   referralAttachments Attachment[]
+
+  vehicles            Vehicle[]
+  crewMembers         CrewMember[]
+  transfersFrom       Transfer[]           @relation("pickup")
+  transfersTo         Transfer[]           @relation("destination")
+  dispatchAssignments DispatchAssignment[]
+  transferEvents      TransferEvent[]
 
   @@unique([networkId, code])
   @@index([networkId, type])
@@ -249,6 +339,13 @@ model User {
   assessmentsRecorded ClinicalAssessment[]
   attachmentsUploaded Attachment[]
   referralEvents      ReferralEvent[]
+
+  vehicleStatusUpdates Vehicle[]
+  crewProfiles         CrewMember[]
+  transfersRequested   Transfer[]
+  assignmentsProposed  DispatchAssignment[] @relation("assignmentProposedBy")
+  assignmentsAnswered  DispatchAssignment[] @relation("assignmentRespondedBy")
+  transferEvents       TransferEvent[]
 }
 
 /// A role held by a user, either at one institution or (institutionId null) across a network.
@@ -466,6 +563,7 @@ model Referral {
   assessments      ClinicalAssessment[]
   attachments      Attachment[]
   events           ReferralEvent[]
+  transfers        Transfer[]
 
   @@index([networkId, status])
   @@index([referringInstitutionId, status])
@@ -594,4 +692,165 @@ model ReferralEvent {
   occurredAt    DateTime          @default(now())
 
   @@index([referralId, occurredAt])
+}
+
+/// An ambulance belonging to a provider (an independent service or a hospital's own ambulance unit).
+model Vehicle {
+  id                String          @id @default(cuid())
+  networkId         String
+  network           Network         @relation(fields: [networkId], references: [id])
+  institutionId     String
+  institution       Institution     @relation(fields: [institutionId], references: [id])
+  /// Number plate, upper case with single spaces.
+  registration      String
+  callSign          String?
+  capability        CapabilityLevel
+  /// Codes from VEHICLE_EQUIPMENT in @lifeline/domain.
+  equipment         String[]
+  /// New vehicles stay off duty until a dispatcher confirms they're available.
+  status            VehicleStatus   @default(OFF_DUTY)
+  statusNote        String?
+  statusUpdatedAt   DateTime?
+  statusUpdatedById String?
+  statusUpdatedBy   User?           @relation(fields: [statusUpdatedById], references: [id], onDelete: SetNull)
+  baseName          String?
+  baseLatitude      Float?
+  baseLongitude     Float?
+  /// Latest position reported by the crew app (Phase 5); null until then.
+  lastLatitude      Float?
+  lastLongitude     Float?
+  lastLocationAt    DateTime?
+  recordStatus      RecordStatus    @default(ACTIVE)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  assignments DispatchAssignment[]
+
+  @@unique([networkId, registration])
+  @@index([institutionId])
+}
+
+/// A person who crews a provider's ambulances. Linked to a Lifeline account when they use the crew app.
+/// Crews are put together per trip, since shifts change; there is no fixed team record.
+model CrewMember {
+  id            String            @id @default(cuid())
+  institutionId String
+  institution   Institution       @relation(fields: [institutionId], references: [id])
+  userId        String?
+  user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fullName      String
+  phone         String?
+  qualification CrewQualification
+  recordStatus  RecordStatus      @default(ACTIVE)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  assignments AssignmentCrew[]
+
+  @@unique([institutionId, userId])
+  @@index([institutionId])
+}
+
+/// Moving an accepted referral's patient from the referring facility to the receiving one.
+/// One open transfer per referral, enforced by a partial unique index in the migration.
+model Transfer {
+  id                       String          @id @default(cuid())
+  networkId                String
+  network                  Network         @relation(fields: [networkId], references: [id])
+  referralId               String
+  referral                 Referral        @relation(fields: [referralId], references: [id])
+  status                   TransferStatus  @default(AWAITING_TRANSPORT)
+  pickupInstitutionId      String
+  pickupInstitution        Institution     @relation("pickup", fields: [pickupInstitutionId], references: [id])
+  destinationInstitutionId String
+  destinationInstitution   Institution     @relation("destination", fields: [destinationInstitutionId], references: [id])
+  requiredCapability       CapabilityLevel
+  requiredEquipment        String[]
+  /// When the patient will be ready for collection; null means now.
+  readyAt                  DateTime?
+  /// For the crew, e.g. oxygen requirement or immobilisation.
+  notes                    String?
+  requestedById            String
+  requestedBy              User            @relation(fields: [requestedById], references: [id])
+  requestedAt              DateTime        @default(now())
+  assignedAt               DateTime?
+  dispatchedAt             DateTime?
+  cancelledAt              DateTime?
+  cancelReason             String?
+  updatedAt                DateTime        @updatedAt
+
+  assignments DispatchAssignment[]
+  events      TransferEvent[]
+
+  @@index([networkId, status])
+  @@index([pickupInstitutionId, status])
+  @@index([destinationInstitutionId, status])
+}
+
+/// A transfer offered to a provider's vehicle, or transport arranged outside Lifeline.
+/// Partial unique indexes keep one open assignment per transfer and one confirmed trip per vehicle.
+model DispatchAssignment {
+  id               String                    @id @default(cuid())
+  transferId       String
+  transfer         Transfer                  @relation(fields: [transferId], references: [id])
+  kind             AssignmentKind
+  status           AssignmentStatus
+  providerId       String?
+  provider         Institution?              @relation(fields: [providerId], references: [id])
+  vehicleId        String?
+  vehicle          Vehicle?                  @relation(fields: [vehicleId], references: [id])
+  proposedById     String
+  proposedBy       User                      @relation("assignmentProposedBy", fields: [proposedById], references: [id])
+  proposedAt       DateTime                  @default(now())
+  /// The arranger's note to the provider.
+  note             String?
+  respondedById    String?
+  respondedBy      User?                     @relation("assignmentRespondedBy", fields: [respondedById], references: [id])
+  respondedAt      DateTime?
+  declineReason    AssignmentDeclineReason?
+  responseNote     String?
+  /// The provider's estimate of minutes to pickup, given when confirming.
+  etaMinutes       Int?
+  endedAt          DateTime?
+  endReason        String?
+  externalService  ExternalTransportService?
+  externalProvider String?
+  externalVehicle  String?
+  externalPhone    String?
+
+  crew   AssignmentCrew[]
+  events TransferEvent[]
+
+  @@index([transferId])
+  @@index([providerId, status])
+  @@index([vehicleId, status])
+}
+
+model AssignmentCrew {
+  assignmentId String
+  assignment   DispatchAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  crewMemberId String
+  crewMember   CrewMember         @relation(fields: [crewMemberId], references: [id])
+
+  @@id([assignmentId, crewMemberId])
+  @@index([crewMemberId])
+}
+
+/// Append-only history of a transfer: every offer, answer and status change, with who and when.
+model TransferEvent {
+  id            String              @id @default(cuid())
+  transferId    String
+  transfer      Transfer            @relation(fields: [transferId], references: [id])
+  assignmentId  String?
+  assignment    DispatchAssignment? @relation(fields: [assignmentId], references: [id])
+  type          TransferEventType
+  actorId       String?
+  actor         User?               @relation(fields: [actorId], references: [id])
+  institutionId String?
+  institution   Institution?        @relation(fields: [institutionId], references: [id])
+  note          String?
+  metadata      Json                @default("{}")
+  occurredAt    DateTime            @default(now())
+
+  @@index([transferId, occurredAt])
 }

@@ -74,6 +74,7 @@ export type ReferralForSummary = Referral & {
   referringInstitution: Pick<Institution, 'id' | 'name'>;
   createdBy: Person;
   requests: RequestWithInstitution[];
+  transfers: { id: string }[];
 };
 
 /**
@@ -85,6 +86,8 @@ export function nextAction(
   viewer: { isReferrer: boolean; respondableRequestIds: string[] },
 ): string | null {
   if (referral.status === 'DRAFT') return viewer.isReferrer ? 'Finish and send' : null;
+  if (referral.status === 'ACCEPTED')
+    return viewer.isReferrer && referral.transfers.length === 0 ? 'Arrange transport' : null;
   if (referral.status !== 'SUBMITTED') return null;
   const mine = referral.requests.filter((r) => viewer.respondableRequestIds.includes(r.id));
   if (mine.some((r) => r.status === 'PENDING')) return 'Respond to request';
@@ -214,4 +217,5 @@ export const summaryInclude = {
     include: { institution: { select: { id: true, name: true } } },
     orderBy: { sentAt: 'asc' },
   },
+  transfers: { where: { status: { not: 'CANCELLED' } }, select: { id: true } },
 } as const;
