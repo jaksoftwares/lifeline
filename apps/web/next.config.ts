@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Linting runs once for the whole monorepo (`pnpm lint`) with the root flat config.
   eslint: { ignoreDuringBuilds: true },
+  experimental: {
+    // Proxied bodies are cut at 10 MB by default, which would break oversized uploads instead of
+    // letting the API answer "too large". Keep this well above the API's 10 MB attachment limit.
+    middlewareClientMaxBodySize: '25mb',
+  },
   async headers() {
     return [
       {

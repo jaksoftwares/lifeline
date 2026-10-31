@@ -59,6 +59,7 @@ export class FacilitiesService {
       services: network.services.map(toServiceView),
       resources: network.resources.map(toResourceView),
       capacityStaleAfterMinutes: network.capacityStaleAfterMinutes,
+      earlyWarningScore: network.earlyWarningScore,
     };
   }
 

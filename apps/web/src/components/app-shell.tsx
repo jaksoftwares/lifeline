@@ -7,6 +7,7 @@ import {
   BedDouble,
   Building2,
   ClipboardList,
+  FileHeart,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -32,6 +33,7 @@ interface NavItem {
 // Modules from later phases (Referrals, Dispatch, Live transfers, …) are added here as they ship.
 const NAV: NavItem[] = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/referrals', label: 'Referrals', icon: FileHeart, permission: 'referral:view' },
   { href: '/network', label: 'Facility network', icon: Building2 },
   { href: '/capacity', label: 'Capacity', icon: BedDouble, permission: 'capacity:update' },
   { href: '/admin/users', label: 'Users and roles', icon: Users, permission: 'users:manage' },
@@ -98,7 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="border-t border-white/10 px-5 py-4 text-xs text-white/60">
-          Phase 1 · Facility network and capacity
+          Phase 2 · Referrals
         </div>
       </aside>
 

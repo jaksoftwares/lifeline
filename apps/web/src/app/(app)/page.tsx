@@ -8,11 +8,6 @@ import { useSession } from '@/lib/session';
 
 const UPCOMING = [
   {
-    phase: 2,
-    name: 'Referrals',
-    detail: 'Digital referrals, clinical observations and receiving-facility responses.',
-  },
-  {
     phase: 3,
     name: 'Ambulances and dispatch',
     detail: 'Fleet, crews, capability levels and confirmed assignments.',
@@ -62,6 +57,14 @@ export default function OverviewPage() {
         <Card>
           <CardHeader title="Quick links" />
           <CardBody className="space-y-2 text-sm">
+            {can('referral:view') && (
+              <Link
+                className="block text-teal-deep underline-offset-2 hover:underline"
+                href="/referrals"
+              >
+                Open referrals
+              </Link>
+            )}
             <Link
               className="block text-teal-deep underline-offset-2 hover:underline"
               href="/network"

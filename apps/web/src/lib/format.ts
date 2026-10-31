@@ -62,6 +62,19 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'department.updated': 'Department updated',
   'department.removed': 'Department removed',
   'capacity.updated': 'Capacity reported',
+  'referral.created': 'Referral started',
+  'referral.submitted': 'Referral sent',
+  'referral.requests_added': 'Referral sent to more facilities',
+  'referral.request_withdrawn': 'Referral request withdrawn',
+  'referral.cancelled': 'Referral cancelled',
+  'referral.viewed': 'Referral opened',
+  'referral.assessment_recorded': 'Observations recorded',
+  'referral.request_accept': 'Referral accepted',
+  'referral.request_decline': 'Referral declined',
+  'referral.request_request_info': 'More information requested',
+  'referral.message_sent': 'Referral message sent',
+  'referral.attachment_added': 'Document attached',
+  'referral.attachment_downloaded': 'Document downloaded',
 };
 
 export function auditActionLabel(action: string): string {

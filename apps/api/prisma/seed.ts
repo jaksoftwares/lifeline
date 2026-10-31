@@ -3,7 +3,7 @@
  * All names are fictional. Never run against production.
  */
 import { existsSync } from 'node:fs';
-import { DEFAULT_RESOURCES, DEFAULT_SERVICES } from '@lifeline/domain';
+import { calculateScore, DEFAULT_RESOURCES, DEFAULT_SERVICES } from '@lifeline/domain';
 import {
   type AvailabilityStatus,
   type InstitutionType,
@@ -266,13 +266,27 @@ export const DEMO_USERS: {
     role: 'AUDITOR',
     institution: null,
   },
+  {
+    email: 'receiving.east@demo.lifeline.test',
+    fullName: 'Dr. Ann Mwikali',
+    role: 'RECEIVING_DECISION_MAKER',
+    institution: 'DCRH-E',
+  },
+  {
+    email: 'receiving.west@demo.lifeline.test',
+    fullName: 'Dr. Paul Njoroge',
+    role: 'RECEIVING_DECISION_MAKER',
+    institution: 'DCRH-W',
+  },
 ];
 
 export async function seed(prisma: PrismaClient, demoPassword: string): Promise<void> {
+  // The demo network shows NEWS2 so the feature can be seen. Real networks start with no score
+  // until their clinical governance group approves one.
   const network = await prisma.network.upsert({
     where: { code: DEMO_NETWORK.code },
-    update: { name: DEMO_NETWORK.name },
-    create: DEMO_NETWORK,
+    update: { name: DEMO_NETWORK.name, earlyWarningScore: 'NEWS2' },
+    create: { ...DEMO_NETWORK, earlyWarningScore: 'NEWS2' },
   });
 
   const serviceIds = new Map<string, string>();
@@ -330,6 +344,107 @@ export async function seed(prisma: PrismaClient, demoPassword: string): Promise<
   }
 
   await seedFacilityDetails(prisma, institutionIds, serviceIds, resourceIds);
+  await seedDemoReferral(prisma, network.id, institutionIds, serviceIds);
+}
+
+/** One referral waiting at the national hospital, so the inboxes aren't empty in a fresh demo. Added once. */
+async function seedDemoReferral(
+  prisma: PrismaClient,
+  networkId: string,
+  institutionIds: Map<string, string>,
+  serviceIds: Map<string, string>,
+): Promise<void> {
+  if ((await prisma.referral.count({ where: { networkId } })) > 0) return;
+  const clinician = await prisma.user.findUniqueOrThrow({
+    where: { email: 'clinician.north@demo.lifeline.test' },
+  });
+  const north = institutionIds.get('DSCH-N')!;
+  const national = institutionIds.get('DNRH')!;
+  const sentAt = new Date(Date.now() - 20 * 60_000);
+  const vitals = {
+    respiratoryRate: 22,
+    oxygenSaturation: 95,
+    onSupplementalOxygen: true,
+    systolicBp: 104,
+    diastolicBp: 66,
+    heartRate: 112,
+    temperature: 37.2,
+    consciousness: 'VOICE' as const,
+  };
+  const score = calculateScore('NEWS2', vitals);
+
+  await prisma.$transaction(async (tx) => {
+    const seq = await tx.network.update({
+      where: { id: networkId },
+      data: { referralSequence: { increment: 1 } },
+    });
+    const patient = await tx.patient.create({
+      data: {
+        networkId,
+        fullName: 'John Mwangi Kariuki',
+        sex: 'MALE',
+        estimatedAge: 42,
+        estimatedAgeUnit: 'YEARS',
+      },
+    });
+    const referral = await tx.referral.create({
+      data: {
+        networkId,
+        reference: `${seq.code}-${String(sentAt.getUTCFullYear()).slice(-2)}-${String(seq.referralSequence).padStart(5, '0')}`,
+        status: 'SUBMITTED',
+        urgency: 'EMERGENCY',
+        referringInstitutionId: north,
+        createdById: clinician.id,
+        patientId: patient.id,
+        pregnancyStatus: 'NOT_APPLICABLE',
+        reason:
+          'Suspected extradural haematoma after a road traffic collision; needs CT and neurosurgical review.',
+        clinicalSummary:
+          'Motorcycle rider, helmet not worn. Brief loss of consciousness at scene, now drowsy and responds to voice. Left temporal swelling. Right pupil sluggish.',
+        provisionalDiagnosis: 'Traumatic brain injury, suspected extradural haematoma',
+        treatmentGiven:
+          'Oxygen 4 L/min by nasal prongs, IV normal saline, cervical collar, tetanus toxoid.',
+        allergies: 'None known',
+        submittedAt: sentAt,
+        createdAt: new Date(sentAt.getTime() - 10 * 60_000),
+        requiredServices: {
+          create: ['NEURO', 'CT'].map((code) => ({ serviceId: serviceIds.get(code)! })),
+        },
+        assessments: {
+          create: {
+            recordedById: clinician.id,
+            observedAt: new Date(sentAt.getTime() - 5 * 60_000),
+            ...vitals,
+            scoreType: 'NEWS2',
+            scoreTotal: score.total,
+            scoreBand: score.band,
+          },
+        },
+        requests: { create: { institutionId: national, sentById: clinician.id, sentAt } },
+      },
+      include: { requests: true },
+    });
+    const events = [
+      { type: 'CREATED' as const, institutionId: north, occurredAt: referral.createdAt },
+      {
+        type: 'ASSESSMENT_RECORDED' as const,
+        institutionId: north,
+        occurredAt: new Date(sentAt.getTime() - 5 * 60_000),
+      },
+      { type: 'SUBMITTED' as const, institutionId: north, occurredAt: sentAt },
+      {
+        type: 'REQUEST_SENT' as const,
+        institutionId: national,
+        requestId: referral.requests[0]!.id,
+        occurredAt: sentAt,
+      },
+    ];
+    for (const event of events) {
+      await tx.referralEvent.create({
+        data: { referralId: referral.id, actorId: clinician.id, ...event },
+      });
+    }
+  });
 }
 
 /** Services, tracked resources, departments and a first round of capacity reports. Added once. */

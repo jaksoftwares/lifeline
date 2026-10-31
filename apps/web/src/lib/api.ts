@@ -84,3 +84,18 @@ async function toApiError(res: Response): Promise<ApiError> {
         : 'The request could not be completed.';
   return new ApiError(res.status, message, fieldErrors);
 }
+
+/** Multipart upload; the browser sets the boundary header. */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const send = () => fetch(`/api${path}`, { method: 'POST', body: form });
+  let res: Response;
+  try {
+    res = await send();
+  } catch {
+    throw new ApiError(0, 'Connection lost. Check your network and try again.');
+  }
+  if (res.status === 401 && (await refreshSession())) res = await send();
+  if (res.status === 413) throw new ApiError(413, 'Files must be 10 MB or smaller.');
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()) as T;
+}

@@ -4,7 +4,7 @@ Healthcare referral and transfer coordination. Connected care. Coordinated trans
 
 - Product context: [problem-statement.md](docs/problem-statement.md)
 - Delivery plan: [docs/implementation-plan.md](docs/implementation-plan.md)
-- Phase records: [Phase 0 — foundations](docs/phase-0-foundations.md), [Phase 1 — facility network and capacity](docs/phase-1-facility-capacity.md)
+- Phase records: [Phase 0 — foundations](docs/phase-0-foundations.md), [Phase 1 — facility network and capacity](docs/phase-1-facility-capacity.md), [Phase 2 — referrals](docs/phase-2-referrals.md)
 - Brand: [lifeline-brand-guidelines.md](docs/lifeline-brand-guidelines.md)
 
 ## Repository layout
@@ -58,6 +58,8 @@ All demo users share the password in `SEED_DEMO_PASSWORD` (default `Lifeline-Dem
 | admin.north@demo.lifeline.test | Facility administrator ¹ | Demo Sub-County Hospital North |
 | receiving.national@demo.lifeline.test | Receiving decision-maker | Demo National Referral Hospital |
 | admin.national@demo.lifeline.test | Facility administrator ¹ | Demo National Referral Hospital |
+| receiving.east@demo.lifeline.test | Receiving decision-maker | Demo County Referral Hospital East |
+| receiving.west@demo.lifeline.test | Receiving decision-maker | Demo County Referral Hospital West |
 | dispatcher@demo.lifeline.test | Dispatcher | Demo Ambulance Services |
 | crew@demo.lifeline.test | Ambulance crew | Demo Ambulance Services |
 | admin.ambulance@demo.lifeline.test | Provider administrator ¹ | Demo Ambulance Services |
@@ -66,6 +68,8 @@ All demo users share the password in `SEED_DEMO_PASSWORD` (default `Lifeline-Dem
 | auditor@demo.lifeline.test | Auditor ¹ | Whole network |
 
 ¹ Requires two-step verification. At first sign-in you'll be asked to scan a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, …).
+
+The seed also creates one emergency referral from North to the National hospital, so `receiving.national` has something to respond to. The demo network uses NEWS2; real networks start with no early-warning score until clinical governance approves one.
 
 ## Checks
 

@@ -15,6 +15,11 @@ import { FacilitiesService } from './facilities/facilities.service';
 import { HealthController } from './health/health.controller';
 import { InstitutionsController } from './institutions/institutions.controller';
 import { PrismaService } from './prisma/prisma.service';
+import { AssessmentsService } from './referrals/assessments.service';
+import { AttachmentsService } from './referrals/attachments.service';
+import { ReferralsController } from './referrals/referrals.controller';
+import { ReferralsService } from './referrals/referrals.service';
+import { ResponsesService } from './referrals/responses.service';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
 
@@ -32,6 +37,7 @@ import { UsersService } from './users/users.service';
     UsersController,
     InstitutionsController,
     FacilitiesController,
+    ReferralsController,
     AuditController,
     HealthController,
   ],
@@ -44,6 +50,10 @@ import { UsersService } from './users/users.service';
     UsersService,
     FacilitiesService,
     CapacityService,
+    ReferralsService,
+    ResponsesService,
+    AssessmentsService,
+    AttachmentsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

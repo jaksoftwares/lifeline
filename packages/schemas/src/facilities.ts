@@ -1,6 +1,7 @@
 import {
   AVAILABILITY_STATUSES,
   type AvailabilityStatus,
+  type EarlyWarningScore,
   FACILITY_LEVELS,
   INSTITUTION_TYPES,
   KENYAN_COUNTIES,
@@ -165,6 +166,8 @@ export interface CatalogueResponse {
   services: ServiceView[];
   resources: ResourceView[];
   capacityStaleAfterMinutes: number;
+  /** The early-warning score this network uses on referrals, or NONE. */
+  earlyWarningScore: EarlyWarningScore;
 }
 
 export interface FacilityProfile extends InstitutionSummary {
