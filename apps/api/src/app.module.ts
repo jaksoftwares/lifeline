@@ -9,6 +9,9 @@ import { AuthGuard } from './auth/auth.guard';
 import { AuthService } from './auth/auth.service';
 import { TokenService } from './auth/token.service';
 import { AppConfig } from './config/app-config';
+import { CapacityService } from './facilities/capacity.service';
+import { FacilitiesController } from './facilities/facilities.controller';
+import { FacilitiesService } from './facilities/facilities.service';
 import { HealthController } from './health/health.controller';
 import { InstitutionsController } from './institutions/institutions.controller';
 import { PrismaService } from './prisma/prisma.service';
@@ -28,6 +31,7 @@ import { UsersService } from './users/users.service';
     AuthController,
     UsersController,
     InstitutionsController,
+    FacilitiesController,
     AuditController,
     HealthController,
   ],
@@ -38,6 +42,8 @@ import { UsersService } from './users/users.service';
     TokenService,
     AuthService,
     UsersService,
+    FacilitiesService,
+    CapacityService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

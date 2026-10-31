@@ -6,8 +6,38 @@ const dateTime = new Intl.DateTimeFormat('en-KE', {
   timeZone: 'Africa/Nairobi',
 });
 
+const time = new Intl.DateTimeFormat('en-KE', {
+  timeStyle: 'short',
+  hourCycle: 'h23',
+  timeZone: 'Africa/Nairobi',
+});
+const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' });
+
 export function formatDateTime(iso: string | null | undefined): string {
   return iso ? dateTime.format(new Date(iso)) : '—';
+}
+
+/** "14:32" for today, otherwise the date and time, in Kenyan time. */
+export function formatWhen(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  return dayKey.format(date) === dayKey.format(now) ? time.format(date) : dateTime.format(date);
+}
+
+/** "25 min ago", "9 h ago", "3 days ago". */
+export function formatAgo(iso: string, now: Date = new Date()): string {
+  const minutes = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 60_000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+export function formatMinutes(total: number): string {
+  if (total < 60) return `${total} min`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {
@@ -23,6 +53,15 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'user.mfa_reset': 'Two-step verification reset',
   'membership.granted': 'Role granted',
   'membership.revoked': 'Role removed',
+  'institution.created': 'Institution added',
+  'institution.profile_updated': 'Facility details updated',
+  'institution.identity_updated': 'Institution name, level or status changed',
+  'facility.services_updated': 'Services updated',
+  'facility.resources_updated': 'Reported capacity items changed',
+  'department.created': 'Department added',
+  'department.updated': 'Department updated',
+  'department.removed': 'Department removed',
+  'capacity.updated': 'Capacity reported',
 };
 
 export function auditActionLabel(action: string): string {

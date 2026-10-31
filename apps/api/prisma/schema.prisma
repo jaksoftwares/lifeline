@@ -1,4 +1,6 @@
-// Lifeline database schema. Phase 0: identity, institutions, memberships, sessions and audit.
+// Lifeline database schema.
+// Phase 0: identity, institutions, memberships, sessions and audit.
+// Phase 1: facility profiles, service and capacity catalogue, departments, capacity reporting.
 
 generator client {
   provider = "prisma-client-js"
@@ -25,6 +27,30 @@ enum UserStatus {
 }
 
 // Mirrors ROLES in @lifeline/domain.
+enum Ownership {
+  PUBLIC
+  PRIVATE
+  FAITH_BASED
+  NGO
+}
+
+enum ResourceKind {
+  BED
+  EQUIPMENT
+  SPECIALIST
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  LIMITED
+  UNAVAILABLE
+}
+
+enum CapacitySource {
+  MANUAL
+  INTEGRATION
+}
+
 enum Role {
   REFERRING_CLINICIAN
   REFERRAL_COORDINATOR
@@ -40,15 +66,19 @@ enum Role {
 
 /// A referral network, e.g. a county or a referral hospital and its feeder facilities. The tenant boundary.
 model Network {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                        String   @id @default(cuid())
+  code                      String   @unique
+  name                      String
+  /// Capacity reports older than this are shown as stale.
+  capacityStaleAfterMinutes Int      @default(240)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   institutions Institution[]
   memberships  Membership[]
   auditEvents  AuditEvent[]
+  services     Service[]
+  resources    CapacityResource[]
 }
 
 /// A healthcare facility or an ambulance provider participating in a network.
@@ -62,12 +92,22 @@ model Institution {
   /// KEPH level (1–6) for facilities; null for ambulance providers.
   level     Int?
   county    String?
+  ownership Ownership?
+  address   String?
+  /// Main switchboard or referral desk number.
+  phone     String?
+  latitude  Float?
+  longitude Float?
   status    RecordStatus    @default(ACTIVE)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  memberships Membership[]
-  auditEvents AuditEvent[]
+  memberships     Membership[]
+  auditEvents     AuditEvent[]
+  services        FacilityService[]
+  resources       FacilityResource[]
+  departments     Department[]
+  capacityUpdates CapacityUpdate[]
 
   @@unique([networkId, code])
   @@index([networkId, type])
@@ -97,10 +137,12 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  memberships Membership[] @relation("member")
-  grantedMemberships Membership[] @relation("grantedBy")
-  sessions    Session[]
-  auditEvents AuditEvent[]
+  memberships        Membership[]       @relation("member")
+  grantedMemberships Membership[]       @relation("grantedBy")
+  sessions           Session[]
+  auditEvents        AuditEvent[]
+  capacityUpdates    CapacityUpdate[]
+  currentCapacity    FacilityResource[]
 }
 
 /// A role held by a user, either at one institution or (institutionId null) across a network.
@@ -161,4 +203,99 @@ model AuditEvent {
   @@index([networkId, occurredAt])
   @@index([institutionId, occurredAt])
   @@index([actorId, occurredAt])
+}
+
+/// A service a facility can offer, from the network's catalogue (e.g. neurosurgery, CT imaging).
+model Service {
+  id        String  @id @default(cuid())
+  networkId String
+  network   Network @relation(fields: [networkId], references: [id])
+  code      String
+  name      String
+  category  String
+  sortOrder Int     @default(0)
+
+  facilities FacilityService[]
+
+  @@unique([networkId, code])
+}
+
+model FacilityService {
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  serviceId     String
+  service       Service     @relation(fields: [serviceId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@id([institutionId, serviceId])
+  @@index([serviceId])
+}
+
+/// Something a facility reports availability for: a bed type, equipment or an on-call specialist.
+model CapacityResource {
+  id        String       @id @default(cuid())
+  networkId String
+  network   Network      @relation(fields: [networkId], references: [id])
+  code      String
+  name      String
+  kind      ResourceKind
+  sortOrder Int          @default(0)
+
+  facilities FacilityResource[]
+  updates    CapacityUpdate[]
+
+  @@unique([networkId, code])
+}
+
+/// A resource a facility tracks, with its latest reported availability (null until first reported).
+model FacilityResource {
+  institutionId String
+  institution   Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  resourceId    String
+  resource      CapacityResource    @relation(fields: [resourceId], references: [id])
+  status        AvailabilityStatus?
+  available     Int?
+  total         Int?
+  note          String?
+  source        CapacitySource?
+  updatedAt     DateTime?
+  updatedById   String?
+  updatedBy     User?               @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime            @default(now())
+
+  @@id([institutionId, resourceId])
+  @@index([resourceId, status])
+}
+
+/// Append-only history of capacity reports. Updates and deletes are blocked by a trigger.
+model CapacityUpdate {
+  id            String             @id @default(cuid())
+  institutionId String
+  institution   Institution        @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  resourceId    String
+  resource      CapacityResource   @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  status        AvailabilityStatus
+  available     Int?
+  total         Int?
+  note          String?
+  source        CapacitySource     @default(MANUAL)
+  recordedById  String?
+  recordedBy    User?              @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  recordedAt    DateTime           @default(now())
+
+  @@index([institutionId, resourceId, recordedAt])
+}
+
+/// A department or unit within a facility, with a direct contact for referrals.
+model Department {
+  id            String      @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  name          String
+  phone         String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([institutionId])
 }

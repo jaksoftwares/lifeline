@@ -26,6 +26,8 @@ export class InstitutionsController {
         level: true,
         county: true,
         status: true,
+        latitude: true,
+        longitude: true,
       },
     });
   }

@@ -8,11 +8,6 @@ import { useSession } from '@/lib/session';
 
 const UPCOMING = [
   {
-    phase: 1,
-    name: 'Facility network and capacity',
-    detail: 'Services, departments and timestamped capacity updates.',
-  },
-  {
     phase: 2,
     name: 'Referrals',
     detail: 'Digital referrals, clinical observations and receiving-facility responses.',
@@ -71,8 +66,16 @@ export default function OverviewPage() {
               className="block text-teal-deep underline-offset-2 hover:underline"
               href="/network"
             >
-              View the facility network
+              Find a receiving facility
             </Link>
+            {can('capacity:update') && (
+              <Link
+                className="block text-teal-deep underline-offset-2 hover:underline"
+                href="/capacity"
+              >
+                Report your facility’s capacity
+              </Link>
+            )}
             {can('users:manage') && (
               <Link
                 className="block text-teal-deep underline-offset-2 hover:underline"

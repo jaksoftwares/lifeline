@@ -191,7 +191,11 @@ describe('institution directory', () => {
   it('shows every network member the whole directory', async () => {
     const res = await clinician.get(`/api/networks/${ids.networkId}/institutions`);
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(6);
+    // Other test files may add institutions to the shared test network, so check the seeded ones.
+    const codes = (res.body as { code: string }[]).map((i) => i.code);
+    expect(codes).toEqual(
+      expect.arrayContaining(['DNRH', 'DCRH-E', 'DCRH-W', 'DSCH-N', 'DSCH-S', 'DAS']),
+    );
   });
 
   it('refuses non-members', async () => {

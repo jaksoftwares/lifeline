@@ -17,6 +17,10 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
+    "@lifeline/web#typecheck": {
+      "description": "next build rewrites .next/types, which the typecheck reads, so run them in order.",
+      "dependsOn": ["^build", "@lifeline/web#build"]
+    },
     "test": {
       "dependsOn": ["^build"],
       "env": ["DATABASE_URL", "JWT_SECRET", "MFA_ENCRYPTION_KEY"]

@@ -97,11 +97,17 @@ export async function demoIds(app: INestApplication) {
   const network = await prisma.network.findUniqueOrThrow({ where: { code: 'DEMO' } });
   const institutions = await prisma.institution.findMany({ where: { networkId: network.id } });
   const byCode = (code: string) => institutions.find((i) => i.code === code)!.id;
+  const services = await prisma.service.findMany({ where: { networkId: network.id } });
+  const resources = await prisma.capacityResource.findMany({ where: { networkId: network.id } });
   return {
     networkId: network.id,
     national: byCode('DNRH'),
+    east: byCode('DCRH-E'),
+    west: byCode('DCRH-W'),
     north: byCode('DSCH-N'),
     south: byCode('DSCH-S'),
     ambulance: byCode('DAS'),
+    service: (code: string) => services.find((s) => s.code === code)!.id,
+    resource: (code: string) => resources.find((r) => r.code === code)!.id,
   };
 }

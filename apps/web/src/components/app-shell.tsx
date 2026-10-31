@@ -4,6 +4,7 @@ import { type Permission } from '@lifeline/domain';
 import { cn, Logo, Select } from '@lifeline/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  BedDouble,
   Building2,
   ClipboardList,
   LayoutDashboard,
@@ -32,6 +33,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/network', label: 'Facility network', icon: Building2 },
+  { href: '/capacity', label: 'Capacity', icon: BedDouble, permission: 'capacity:update' },
   { href: '/admin/users', label: 'Users and roles', icon: Users, permission: 'users:manage' },
   { href: '/admin/audit', label: 'Audit log', icon: ClipboardList, permission: 'audit:view' },
   { href: '/account', label: 'My account', icon: UserCog },
@@ -96,7 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="border-t border-white/10 px-5 py-4 text-xs text-white/60">
-          Phase 0 · Foundations
+          Phase 1 · Facility network and capacity
         </div>
       </aside>
 

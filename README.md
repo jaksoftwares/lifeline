@@ -4,7 +4,7 @@ Healthcare referral and transfer coordination. Connected care. Coordinated trans
 
 - Product context: [problem-statement.md](docs/problem-statement.md)
 - Delivery plan: [docs/implementation-plan.md](docs/implementation-plan.md)
-- Phase 0 record: [docs/phase-0-foundations.md](docs/phase-0-foundations.md)
+- Phase records: [Phase 0 — foundations](docs/phase-0-foundations.md), [Phase 1 — facility network and capacity](docs/phase-1-facility-capacity.md)
 - Brand: [lifeline-brand-guidelines.md](docs/lifeline-brand-guidelines.md)
 
 ## Repository layout

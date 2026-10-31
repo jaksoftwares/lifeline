@@ -9,4 +9,6 @@ export interface InstitutionSummary {
   level: number | null;
   county: string | null;
   status: 'ACTIVE' | 'INACTIVE';
+  latitude: number | null;
+  longitude: number | null;
 }
