@@ -11,6 +11,8 @@ export function configureApp(app: NestExpressApplication): void {
   app.set('trust proxy', 'loopback');
   app.use(helmet());
   app.use(cookieParser());
+  // A crew app returning from a long offline stretch uploads its whole queue in one request.
+  app.useBodyParser('json', { limit: '1mb' });
   app.enableCors({ origin: config.env.WEB_ORIGIN, credentials: true });
   app.enableShutdownHooks();
 }

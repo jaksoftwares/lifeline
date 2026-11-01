@@ -4,7 +4,7 @@ Healthcare referral and transfer coordination. Connected care. Coordinated trans
 
 - Product context: [problem-statement.md](docs/problem-statement.md)
 - Delivery plan: [docs/implementation-plan.md](docs/implementation-plan.md)
-- Phase records: [Phase 0 — foundations](docs/phase-0-foundations.md), [Phase 1 — facility network and capacity](docs/phase-1-facility-capacity.md), [Phase 2 — referrals](docs/phase-2-referrals.md), [Phase 3 — ambulances and dispatch](docs/phase-3-ambulances-dispatch.md)
+- Phase records: [Phase 0 — foundations](docs/phase-0-foundations.md), [Phase 1 — facility network and capacity](docs/phase-1-facility-capacity.md), [Phase 2 — referrals](docs/phase-2-referrals.md), [Phase 3 — ambulances and dispatch](docs/phase-3-ambulances-dispatch.md), [Phase 4 — crew app](docs/phase-4-crew-app.md)
 - Brand: [lifeline-brand-guidelines.md](docs/lifeline-brand-guidelines.md)
 
 ## Repository layout
@@ -13,6 +13,7 @@ Healthcare referral and transfer coordination. Connected care. Coordinated trans
 apps/
   api/        NestJS API (modular monolith), Prisma + PostgreSQL
   web/        Next.js web app for facilities, dispatch, operations and admin
+  mobile/     Expo (React Native) crew app: trips, status updates offline, location sharing
 packages/
   domain/     Roles, permissions and scope rules shared by API and web
   schemas/    Zod request schemas and API response types
@@ -71,6 +72,17 @@ All demo users share the password in `SEED_DEMO_PASSWORD` (default `Lifeline-Dem
 ¹ Requires two-step verification. At first sign-in you'll be asked to scan a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, …).
 
 The seed also creates one emergency referral from North to the National hospital, so `receiving.national` has something to respond to, and one urgent referral already accepted by the East hospital, so `clinician.north` can arrange transport straight away. Two ambulance providers have vehicles in different states (available, out of service, off duty, availability out of date) and crew. Vehicle availability is relative to when the seed ran and goes out of date after 12 hours; dispatchers confirm it on the Fleet page. The demo network uses NEWS2; real networks start with no early-warning score until clinical governance approves one.
+
+## Crew app
+
+The crew app runs as an Expo development build (background location needs native configuration). With the API running:
+
+```sh
+cd apps/mobile
+npx expo run:android
+```
+
+The emulator reaches the API at `10.0.2.2:4000`. For a phone on your Wi-Fi, set `EXPO_PUBLIC_API_URL=http://<your computer's IP>:4000/api`. Sign in as `crew@demo.lifeline.test`. See [docs/phase-4-crew-app.md](docs/phase-4-crew-app.md).
 
 ## Checks
 

@@ -12,6 +12,8 @@ import { AppConfig } from './config/app-config';
 import { CapacityService } from './facilities/capacity.service';
 import { FacilitiesController } from './facilities/facilities.controller';
 import { FacilitiesService } from './facilities/facilities.service';
+import { CrewController } from './crew/crew.controller';
+import { CrewService } from './crew/crew.service';
 import { HealthController } from './health/health.controller';
 import { InstitutionsController } from './institutions/institutions.controller';
 import { PrismaService } from './prisma/prisma.service';
@@ -45,6 +47,7 @@ import { UsersService } from './users/users.service';
     ReferralsController,
     FleetController,
     TransfersController,
+    CrewController,
     AuditController,
     HealthController,
   ],
@@ -64,6 +67,7 @@ import { UsersService } from './users/users.service';
     FleetService,
     TransfersService,
     DispatchService,
+    CrewService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

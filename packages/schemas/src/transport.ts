@@ -292,6 +292,9 @@ export interface TransferEventView {
   actor: PersonRef | null;
   institution: Ref | null;
   note: string | null;
+  /** When the server received it; later than occurredAt for updates queued offline. */
+  receivedAt: string;
+  source: 'WEB' | 'CREW_APP';
 }
 
 interface PlaceView extends Ref {
@@ -317,6 +320,9 @@ export interface TransferDetail {
   requestedAt: string;
   assignedAt: string | null;
   dispatchedAt: string | null;
+  atPickupAt: string | null;
+  collectedAt: string | null;
+  arrivedAt: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
   /** Rough pickup-to-destination drive time. */

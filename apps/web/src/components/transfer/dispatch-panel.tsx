@@ -69,6 +69,19 @@ export function DispatchPanel({
     );
   }
 
+  // Once the ambulance has reached the patient, changes go through the crew app.
+  const beforePickup = t.status === 'AMBULANCE_ASSIGNED' || t.status === 'DISPATCHED';
+  if (!beforePickup) {
+    return (
+      <Card>
+        <CardHeader
+          title="Dispatch"
+          description="The crew is updating this trip from the crew app. Call them if anything changes."
+        />
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader title="Dispatch" description="Your team’s actions on this trip." />

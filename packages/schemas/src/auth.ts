@@ -54,8 +54,22 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type AuthStep =
   'AUTHENTICATED' | 'PASSWORD_CHANGE_REQUIRED' | 'MFA_SETUP_REQUIRED' | 'MFA_REQUIRED';
 
+/** Sent by the crew app on sign-in requests; tokens then come back in the body instead of cookies. */
+export const MOBILE_CLIENT_HEADER = 'x-lifeline-client';
+
+/** Tokens for the crew app, which keeps them in the device's secure storage. */
+export interface MobileTokens {
+  accessToken: string;
+  /** Absent when the refresh token was not rotated (a concurrent refresh already did). */
+  refreshToken?: string;
+  accessExpiresInSeconds: number;
+  sessionExpiresAt: string;
+}
+
+export const mobileRefreshSchema = z.object({ refreshToken: z.string().min(10).max(500) });
+
 export type AuthStepResponse =
-  | { step: 'AUTHENTICATED'; user: CurrentUser }
+  | { step: 'AUTHENTICATED'; user: CurrentUser; tokens?: MobileTokens }
   | { step: Exclude<AuthStep, 'AUTHENTICATED'>; challengeToken: string };
 
 export interface MfaSetupResponse {

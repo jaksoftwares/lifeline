@@ -16,6 +16,9 @@ import {
   initialPasswordSchema,
   loginSchema,
   mfaVerifySchema,
+  MOBILE_CLIENT_HEADER,
+  type MobileTokens,
+  mobileRefreshSchema,
 } from '@lifeline/schemas';
 import { Request, Response } from 'express';
 import { z } from 'zod';
@@ -24,7 +27,13 @@ import { ZodPipe } from '../common/zod.pipe';
 import { AppConfig } from '../config/app-config';
 import { Auth, AuthContext, Public } from './auth-context';
 import { AuthService, SignInResult } from './auth.service';
-import { clearAuthCookies, REFRESH_COOKIE, setAuthCookies } from './cookies';
+import {
+  ACCESS_TTL_SECONDS,
+  clearAuthCookies,
+  type IssuedTokens,
+  REFRESH_COOKIE,
+  setAuthCookies,
+} from './cookies';
 
 // Sign-in endpoints get a much tighter rate limit than the rest of the API.
 const SIGN_IN_LIMIT = { default: { limit: 10, ttl: 60_000 } };
@@ -43,9 +52,10 @@ export class AuthController {
   async login(
     @Body(new ZodPipe(loginSchema)) body: z.infer<typeof loginSchema>,
     @Meta() meta: RequestMeta,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthStepResponse> {
-    return this.respond(res, await this.auth.login(body, meta));
+    return this.respond(req, res, await this.auth.login(body, meta));
   }
 
   @Public()
@@ -55,9 +65,10 @@ export class AuthController {
   async initialPassword(
     @Body(new ZodPipe(initialPasswordSchema)) body: z.infer<typeof initialPasswordSchema>,
     @Meta() meta: RequestMeta,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthStepResponse> {
-    return this.respond(res, await this.auth.setInitialPassword(body, meta));
+    return this.respond(req, res, await this.auth.setInitialPassword(body, meta));
   }
 
   @Public()
@@ -75,9 +86,10 @@ export class AuthController {
   async mfaSetupConfirm(
     @Body(new ZodPipe(mfaVerifySchema)) body: z.infer<typeof mfaVerifySchema>,
     @Meta() meta: RequestMeta,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthStepResponse> {
-    return this.respond(res, await this.auth.confirmMfaSetup(body, meta));
+    return this.respond(req, res, await this.auth.confirmMfaSetup(body, meta));
   }
 
   @Public()
@@ -87,9 +99,10 @@ export class AuthController {
   async mfaVerify(
     @Body(new ZodPipe(mfaVerifySchema)) body: z.infer<typeof mfaVerifySchema>,
     @Meta() meta: RequestMeta,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthStepResponse> {
-    return this.respond(res, await this.auth.verifyMfa(body, meta));
+    return this.respond(req, res, await this.auth.verifyMfa(body, meta));
   }
 
   @Public()
@@ -108,6 +121,17 @@ export class AuthController {
       clearAuthCookies(res, this.config.cookieSecure);
       throw error;
     }
+  }
+
+  /** The crew app's refresh: the token travels in the body and new tokens come back the same way. */
+  @Public()
+  @Post('mobile/refresh')
+  @HttpCode(200)
+  async mobileRefresh(
+    @Body(new ZodPipe(mobileRefreshSchema)) body: z.infer<typeof mobileRefreshSchema>,
+    @Meta() meta: RequestMeta,
+  ): Promise<MobileTokens> {
+    return toMobileTokens(await this.auth.refresh(body.refreshToken, meta));
   }
 
   @Post('logout')
@@ -136,9 +160,21 @@ export class AuthController {
     await this.auth.changePassword(auth.userId, auth.sessionId, body, meta);
   }
 
-  private respond(res: Response, result: SignInResult): AuthStepResponse {
+  private respond(req: Request, res: Response, result: SignInResult): AuthStepResponse {
     if (result.step !== 'AUTHENTICATED') return result;
+    if (req.get(MOBILE_CLIENT_HEADER) === 'mobile') {
+      return { step: 'AUTHENTICATED', user: result.user, tokens: toMobileTokens(result.tokens) };
+    }
     setAuthCookies(res, result.tokens, this.config.cookieSecure);
     return { step: 'AUTHENTICATED', user: result.user };
   }
+}
+
+function toMobileTokens(tokens: IssuedTokens): MobileTokens {
+  return {
+    accessToken: tokens.accessToken,
+    ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
+    accessExpiresInSeconds: ACCESS_TTL_SECONDS,
+    sessionExpiresAt: tokens.sessionExpiresAt.toISOString(),
+  };
 }

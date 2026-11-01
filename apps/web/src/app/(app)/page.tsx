@@ -8,14 +8,14 @@ import { useSession } from '@/lib/session';
 
 const UPCOMING = [
   {
-    phase: 4,
-    name: 'Crew mobile app',
-    detail: 'Trip status updates and location sharing, including offline.',
-  },
-  {
     phase: 5,
     name: 'Live tracking',
     detail: 'Ambulance positions and arrival estimates shared with both facilities.',
+  },
+  {
+    phase: 6,
+    name: 'Handover and costs',
+    detail: 'Handover confirmed by the receiving team, and transport costs recorded.',
   },
 ];
 

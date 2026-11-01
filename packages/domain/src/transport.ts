@@ -159,6 +159,78 @@ export function isOpenTransfer(status: TransferStatus): boolean {
   return status !== 'COMPLETED' && status !== 'CANCELLED';
 }
 
+// ---- Crew updates (Phase 4) ----
+
+/** Statuses the crew app can record. Handover and completion come with Phase 6. */
+export const CREW_STATUSES = [
+  'DISPATCHED',
+  'AT_PICKUP',
+  'PATIENT_COLLECTED',
+  'IN_TRANSIT',
+  'ARRIVED',
+  'INTERRUPTED',
+] as const;
+export type CrewStatus = (typeof CREW_STATUSES)[number];
+
+/** The journey as the crew moves through it, in order. */
+export const CREW_JOURNEY: readonly CrewStatus[] = CREW_STATUSES.filter((s) => s !== 'INTERRUPTED');
+
+/** Button labels in the crew app, for the next step from each status. */
+export const CREW_ACTION_LABELS: Record<CrewStatus, string> = {
+  DISPATCHED: 'On our way',
+  AT_PICKUP: 'Arrived at pickup',
+  PATIENT_COLLECTED: 'Patient on board',
+  IN_TRANSIT: 'Leaving for destination',
+  ARRIVED: 'Arrived at destination',
+  INTERRUPTED: 'Report a problem',
+};
+
+const JOURNEY_ORDER: readonly TransferStatus[] = [
+  'AMBULANCE_ASSIGNED',
+  ...CREW_JOURNEY,
+  'HANDED_OVER',
+  'COMPLETED',
+];
+
+/** The crew's next forward step, or null when there is none for them to take. */
+export function nextCrewStatus(current: TransferStatus): CrewStatus | null {
+  if (current === 'INTERRUPTED') return 'IN_TRANSIT';
+  const i = JOURNEY_ORDER.indexOf(current);
+  const next = i >= 0 ? JOURNEY_ORDER[i + 1] : undefined;
+  return next && (CREW_STATUSES as readonly string[]).includes(next) ? (next as CrewStatus) : null;
+}
+
+export type CrewUpdateDecision =
+  | { outcome: 'APPLY' }
+  /** Already reached, e.g. the dispatcher recorded it while the crew was offline. Not an error. */
+  | { outcome: 'ALREADY_RECORDED' }
+  | { outcome: 'REJECTED'; reason: 'INVALID_TRANSITION' | 'TRANSFER_ENDED' };
+
+/**
+ * Judges a crew update against the transfer's status on the server. Updates queued offline arrive
+ * late and in order; one the server has already passed is accepted as a no-op rather than an error.
+ */
+export function evaluateCrewUpdate(
+  current: TransferStatus,
+  target: CrewStatus,
+): CrewUpdateDecision {
+  if (current === 'CANCELLED') return { outcome: 'REJECTED', reason: 'TRANSFER_ENDED' };
+  if (target === 'INTERRUPTED') {
+    if (current === 'INTERRUPTED') return { outcome: 'ALREADY_RECORDED' };
+    return canTransition(current, target)
+      ? { outcome: 'APPLY' }
+      : { outcome: 'REJECTED', reason: 'INVALID_TRANSITION' };
+  }
+  if (canTransition(current, target)) return { outcome: 'APPLY' };
+  const at = JOURNEY_ORDER.indexOf(current);
+  const to = JOURNEY_ORDER.indexOf(target);
+  if (at >= 0 && to >= 0 && at >= to) return { outcome: 'ALREADY_RECORDED' };
+  return { outcome: 'REJECTED', reason: 'INVALID_TRANSITION' };
+}
+
+/** Device clocks drift; times further ahead than this are replaced with the time received. */
+export const MAX_CLOCK_SKEW_MS = 5 * 60_000;
+
 // ---- Dispatch assignments ----
 
 export const ASSIGNMENT_STATUSES = [

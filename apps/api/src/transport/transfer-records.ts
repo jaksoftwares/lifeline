@@ -13,6 +13,9 @@ export interface TransferEventInput {
   note?: string | null;
   metadata?: Record<string, unknown>;
   at?: Date;
+  /** Crew-app updates: where it came from and the device's id for the press. */
+  source?: 'WEB' | 'CREW_APP';
+  clientId?: string;
 }
 
 /** Appends to the transfer's history and marks the transfer as recently changed (for list ordering). */
@@ -28,9 +31,12 @@ export async function recordTransferEvent(tx: Tx, input: TransferEventInput): Pr
       note: input.note ?? null,
       metadata: (input.metadata ?? {}) as Prisma.InputJsonObject,
       occurredAt: at,
+      source: input.source ?? 'WEB',
+      clientId: input.clientId ?? null,
     },
   });
-  await tx.transfer.update({ where: { id: input.transferId }, data: { updatedAt: at } });
+  // Ordered by when the change reached the server, so late offline updates still surface in lists.
+  await tx.transfer.update({ where: { id: input.transferId }, data: { updatedAt: new Date() } });
 }
 
 /**

@@ -147,6 +147,28 @@ function TransferView({ transfer: t }: { transfer: TransferDetail }) {
   );
 }
 
+/** Times the crew recorded, as they happened on the road (sent later if they had no signal). */
+function JourneyTimes({ transfer: t }: { transfer: TransferDetail }) {
+  const steps: [string, string | null][] = [
+    ['Dispatched', t.dispatchedAt],
+    ['At pickup', t.atPickupAt],
+    ['Patient collected', t.collectedAt],
+    ['Arrived', t.arrivedAt],
+  ];
+  const done = steps.filter(([, at]) => at);
+  if (done.length === 0) return null;
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+      {done.map(([label, at]) => (
+        <div key={label} className="contents">
+          <dt className="text-slate">{label}</dt>
+          <dd className="tabular text-ink">{formatDateTime(at)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function Route({ transfer: t }: { transfer: TransferDetail }) {
   const dept = t.destination.department;
   return (
@@ -257,7 +279,7 @@ function CurrentAssignment({
             dispatched.
           </p>
         )}
-        {t.dispatchedAt && <p>Dispatched {formatDateTime(t.dispatchedAt)}.</p>}
+        <JourneyTimes transfer={t} />
         {a.note && <p className="text-slate">Note to provider: {a.note}</p>}
         {a.responseNote && <p className="text-slate">Provider’s note: {a.responseNote}</p>}
 

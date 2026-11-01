@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canTransition, meetsCapability, rankVehicles, type VehicleCandidate } from './transport';
+import {
+  canTransition,
+  evaluateCrewUpdate,
+  meetsCapability,
+  nextCrewStatus,
+  rankVehicles,
+  type VehicleCandidate,
+} from './transport';
 
 const now = new Date('2026-11-01T10:00:00Z');
 const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000);
@@ -144,5 +151,47 @@ describe('rankVehicles', () => {
     expect(suggestions[1]!.cautions).toContain(
       'Location unknown; time to pickup can’t be estimated',
     );
+  });
+});
+
+describe('crew updates', () => {
+  it('moves the journey forward one step at a time', () => {
+    expect(nextCrewStatus('AMBULANCE_ASSIGNED')).toBe('DISPATCHED');
+    expect(nextCrewStatus('IN_TRANSIT')).toBe('ARRIVED');
+    expect(nextCrewStatus('INTERRUPTED')).toBe('IN_TRANSIT');
+    expect(nextCrewStatus('ARRIVED')).toBeNull();
+    expect(nextCrewStatus('AWAITING_TRANSPORT')).toBeNull();
+  });
+
+  it('applies the next step', () => {
+    expect(evaluateCrewUpdate('DISPATCHED', 'AT_PICKUP')).toEqual({ outcome: 'APPLY' });
+    expect(evaluateCrewUpdate('AMBULANCE_ASSIGNED', 'DISPATCHED')).toEqual({ outcome: 'APPLY' });
+    expect(evaluateCrewUpdate('IN_TRANSIT', 'INTERRUPTED')).toEqual({ outcome: 'APPLY' });
+    expect(evaluateCrewUpdate('INTERRUPTED', 'IN_TRANSIT')).toEqual({ outcome: 'APPLY' });
+  });
+
+  it('accepts a late update for a step already passed, without changing anything', () => {
+    expect(evaluateCrewUpdate('AT_PICKUP', 'DISPATCHED')).toEqual({ outcome: 'ALREADY_RECORDED' });
+    expect(evaluateCrewUpdate('DISPATCHED', 'DISPATCHED')).toEqual({
+      outcome: 'ALREADY_RECORDED',
+    });
+    expect(evaluateCrewUpdate('INTERRUPTED', 'INTERRUPTED')).toEqual({
+      outcome: 'ALREADY_RECORDED',
+    });
+  });
+
+  it('rejects skipped steps and updates to ended transfers', () => {
+    expect(evaluateCrewUpdate('DISPATCHED', 'IN_TRANSIT')).toEqual({
+      outcome: 'REJECTED',
+      reason: 'INVALID_TRANSITION',
+    });
+    expect(evaluateCrewUpdate('AWAITING_TRANSPORT', 'AT_PICKUP')).toEqual({
+      outcome: 'REJECTED',
+      reason: 'INVALID_TRANSITION',
+    });
+    expect(evaluateCrewUpdate('CANCELLED', 'ARRIVED')).toEqual({
+      outcome: 'REJECTED',
+      reason: 'TRANSFER_ENDED',
+    });
   });
 });

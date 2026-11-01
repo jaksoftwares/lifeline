@@ -2,7 +2,17 @@
 
 import { type TransferEventView } from '@lifeline/schemas';
 import { Card, CardHeader } from '@lifeline/ui';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatWhen } from '@/lib/format';
+
+/** Updates that reach the server this much later were recorded while the crew had no signal. */
+const OFFLINE_DELAY_MS = 2 * 60_000;
+
+function delivery(e: TransferEventView): string | null {
+  if (e.source !== 'CREW_APP') return null;
+  const late =
+    new Date(e.receivedAt).getTime() - new Date(e.occurredAt).getTime() > OFFLINE_DELAY_MS;
+  return late ? `Crew app · recorded offline, received ${formatWhen(e.receivedAt)}` : 'Crew app';
+}
 
 function describe(e: TransferEventView): string {
   const who = e.institution?.name ?? 'the provider';
@@ -29,6 +39,18 @@ function describe(e: TransferEventView): string {
       return 'Ambulance dispatched';
     case 'CANCELLED':
       return 'Transport cancelled';
+    case 'AT_PICKUP':
+      return 'Ambulance at pickup';
+    case 'PATIENT_COLLECTED':
+      return 'Patient collected';
+    case 'IN_TRANSIT':
+      return 'Left for the receiving facility';
+    case 'ARRIVED':
+      return 'Arrived at the receiving facility';
+    case 'INTERRUPTED':
+      return 'Problem reported by the crew';
+    case 'RESUMED':
+      return 'Journey resumed';
     default:
       return e.type;
   }
@@ -57,6 +79,7 @@ export function TransferHistory({ events }: { events: TransferEventView[] }) {
               {formatDateTime(e.occurredAt)}
               {e.actor && ` · ${e.actor.fullName}`}
             </p>
+            {delivery(e) && <p className="text-xs text-slate">{delivery(e)}</p>}
             {e.note && <p className="mt-0.5 text-xs text-slate">{e.note}</p>}
           </li>
         ))}

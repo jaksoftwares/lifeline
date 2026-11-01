@@ -9,3 +9,10 @@ allowBuilds:
   '@swc/core': true
   esbuild: true
   prisma: true
+
+# Expo SDK 58 patch releases newer than our two-week minimum are held back so peers stay consistent.
+overrides:
+  '@expo/router-server': 58.0.14
+  '@react-native/metro-config': 0.88.0
+  # A native module may be installed only once in an app build.
+  expo-constants: 58.0.12

@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="border-t border-white/10 px-5 py-4 text-xs text-white/60">
-          Phase 3 · Ambulances and dispatch
+          Phase 4 · Crew app
         </div>
       </aside>
 

@@ -5,3 +5,4 @@ export * from './users';
 export * from './facilities';
 export * from './referrals';
 export * from './transport';
+export * from './crew';

@@ -183,5 +183,7 @@ export function toTransferEventView(
     actor: e.actor,
     institution: e.institution,
     note: e.note,
+    receivedAt: e.receivedAt.toISOString(),
+    source: e.source,
   };
 }

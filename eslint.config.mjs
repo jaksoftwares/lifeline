@@ -12,6 +12,8 @@ export default tseslint.config(
       '**/.next/**',
       '**/.turbo/**',
       '**/next-env.d.ts',
+      '**/.expo/**',
+      '**/expo-env.d.ts',
     ],
   },
   js.configs.recommended,
@@ -41,5 +43,11 @@ export default tseslint.config(
       ...nextPlugin.configs['core-web-vitals'].rules,
     },
     settings: { next: { rootDir: 'apps/web' } },
+  },
+  {
+    files: ['apps/mobile/**/*.{ts,tsx}'],
+    languageOptions: { globals: { ...globals.browser } },
+    plugins: { 'react-hooks': reactHooks },
+    rules: { ...reactHooks.configs.recommended.rules },
   },
 );
