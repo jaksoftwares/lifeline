@@ -1,24 +1,40 @@
 'use client';
 
-import { useActionState } from 'react';
-import { Alert, Button, Field, Input } from '@/components/ui';
-import { login, type LoginState } from './actions';
+import Link from 'next/link';
+import { ActionForm } from '@/components/form';
+import { PasswordInput } from '@/components/password-input';
+import { Field, Input } from '@/components/ui';
+import { login } from './actions';
 
 export function LoginForm({ next }: { next?: string }) {
-  const [state, action, pending] = useActionState<LoginState, FormData>(login, {});
   return (
-    <form action={action} className="space-y-4">
-      {state.error && <Alert>{state.error}</Alert>}
+    <ActionForm action={login} submit="Sign in" pendingLabel="Signing in…" fullWidth>
       <input type="hidden" name="next" value={next ?? ''} />
       <Field label="Email">
-        <Input name="email" type="email" autoComplete="email" required defaultValue={state.email} />
+        <Input
+          name="email"
+          type="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoFocus
+        />
       </Field>
-      <Field label="Password">
-        <Input name="password" type="password" autoComplete="current-password" required />
-      </Field>
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? 'Signing in…' : 'Sign in'}
-      </Button>
-    </form>
+      <div>
+        <div className="mb-1.5 flex items-center justify-between">
+          <label htmlFor="password" className="text-sm font-medium text-slate-700">
+            Password
+          </label>
+          <Link
+            href="/forgot-password"
+            className="text-sm font-semibold text-brand-700 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
+        <PasswordInput id="password" name="password" autoComplete="current-password" />
+      </div>
+    </ActionForm>
   );
 }

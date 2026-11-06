@@ -8,6 +8,7 @@ import {
   BarChart3,
   BedDouble,
   LayoutDashboard,
+  KeyRound,
   ListChecks,
   LogOut,
   Menu,
@@ -79,11 +80,20 @@ export function AppShell({
       <div className="border-t border-white/10 p-4">
         <p className="truncate text-sm font-semibold text-white">{userName}</p>
         <p className="truncate text-xs text-brand-200">{orgName}</p>
-        <form action="/signout" method="post" className="mt-3">
-          <button className="flex items-center gap-2 text-sm text-brand-100 hover:text-white">
-            <LogOut className="h-4 w-4" /> Sign out
-          </button>
-        </form>
+        <div className="mt-3 flex flex-col gap-2">
+          <Link
+            href="/account"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 text-sm text-brand-100 hover:text-white"
+          >
+            <KeyRound className="h-4 w-4" /> Change password
+          </Link>
+          <form action="/signout" method="post">
+            <button className="flex items-center gap-2 text-sm text-brand-100 hover:text-white">
+              <LogOut className="h-4 w-4" /> Sign out
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

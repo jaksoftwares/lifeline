@@ -8,10 +8,19 @@ import type { Organization, OrgType } from './types';
 export interface FormState {
   error?: string;
   success?: string;
+  /** The form field the error is about, so the form can highlight and focus it. */
+  field?: string;
 }
 
-/** An expected failure whose message is safe to show the user. */
-export class ActionError extends Error {}
+/** An expected failure whose message is safe to show the user, optionally about one field. */
+export class ActionError extends Error {
+  constructor(
+    message: string,
+    readonly field?: string,
+  ) {
+    super(message);
+  }
+}
 
 export type Member = CurrentUser & { organization: Organization };
 
@@ -55,7 +64,10 @@ export function parseForm<T extends z.ZodType>(schema: T, formData: FormData): z
     raw[key.replace(/\[\]$/, '')] = key.endsWith('[]') ? formData.getAll(key) : formData.get(key);
   }
   const result = schema.safeParse(raw);
-  if (!result.success) throw new ActionError(result.error.issues[0].message);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    throw new ActionError(issue.message, issue.path[0]?.toString());
+  }
   return result.data;
 }
 
@@ -64,7 +76,7 @@ export async function run(body: () => Promise<string | void>): Promise<FormState
   try {
     return { success: (await body()) ?? 'Saved.' };
   } catch (error) {
-    if (error instanceof ActionError) return { error: error.message };
+    if (error instanceof ActionError) return { error: error.message, field: error.field };
     throw error; // includes Next.js redirects
   }
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Ambulance, Hospital } from 'lucide-react';
 import { ActionForm } from '@/components/form';
 import { LocationField } from '@/components/location-field';
+import { PasswordInput } from '@/components/password-input';
 import { Field, Input, Select } from '@/components/ui';
 import { COUNTIES } from '@/lib/constants';
 import type { OrgType } from '@/lib/types';
@@ -23,7 +24,12 @@ export function RegisterForm() {
   const [type, setType] = useState<OrgType>('hospital');
 
   return (
-    <ActionForm action={register} submit="Create account" className="space-y-6">
+    <ActionForm
+      action={register}
+      submit="Create account"
+      pendingLabel="Creating your account…"
+      className="space-y-6"
+    >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {TYPES.map(({ value, label, text, icon: Icon }) => (
           <label
@@ -102,16 +108,17 @@ export function RegisterForm() {
             <Input name="user_phone" type="tel" autoComplete="tel" />
           </Field>
           <Field label="Email">
-            <Input name="email" type="email" autoComplete="email" required />
+            <Input
+              name="email"
+              type="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
           </Field>
           <Field label="Password" hint="At least 8 characters">
-            <Input
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
+            <PasswordInput name="password" autoComplete="new-password" />
           </Field>
         </div>
       </fieldset>

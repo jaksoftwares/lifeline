@@ -13,6 +13,7 @@ import {
   text,
   type FormState,
 } from '@/lib/actions';
+import { authErrorMessage, normalizeEmail } from '@/lib/auth-errors';
 import { COUNTIES } from '@/lib/constants';
 import { adminEmails, appUrl, sendEmails } from '@/lib/email';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -29,8 +30,11 @@ const schema = z.object({
   ...location,
   full_name: text('Your name', 100),
   user_phone: optionalText(30),
-  email: z.email('Enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  email: z
+    .string()
+    .transform(normalizeEmail)
+    .pipe(z.email({ error: 'Enter a valid email address' })),
+  password: z.string().min(8, 'Use at least 8 characters for the password'),
 });
 
 /** Open registration (demo mode): creates the organization and its first admin, then signs in. */
@@ -46,10 +50,14 @@ export async function register(_: FormState, formData: FormData): Promise<FormSt
       user_metadata: { full_name: input.full_name },
     });
     if (created.error) {
+      const code = created.error.code;
       throw new ActionError(
-        created.error.code === 'email_exists'
-          ? 'An account with this email already exists. Sign in instead.'
-          : created.error.message,
+        authErrorMessage(created.error),
+        code === 'email_exists' || code === 'user_already_exists'
+          ? 'email'
+          : code === 'weak_password'
+            ? 'password'
+            : undefined,
       );
     }
     const userId = created.data.user.id;
@@ -88,7 +96,14 @@ export async function register(_: FormState, formData: FormData): Promise<FormSt
     }
 
     const supabase = await createClient();
-    await supabase.auth.signInWithPassword({ email: input.email, password: input.password });
+    const signIn = await supabase.auth.signInWithPassword({
+      email: input.email,
+      password: input.password,
+    });
+    if (signIn.error) {
+      // The account exists; only the automatic sign-in failed.
+      redirect('/login?notice=registered');
+    }
 
     const isHospital = input.type === 'hospital';
     after(() =>

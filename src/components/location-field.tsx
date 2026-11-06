@@ -33,7 +33,7 @@ export function LocationField({ defaultValue }: { defaultValue?: Point | null })
   }
 
   return (
-    <div>
+    <div className="rounded-lg has-[[aria-invalid=true]]:ring-2 has-[[aria-invalid=true]]:ring-red-500 has-[[aria-invalid=true]]:ring-offset-4">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-sm font-medium text-slate-700">Location</span>
         <button
