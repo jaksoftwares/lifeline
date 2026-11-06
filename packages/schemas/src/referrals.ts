@@ -34,10 +34,14 @@ const text = (max: number) =>
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD.')
-  .refine(
-    (v) => !Number.isNaN(Date.parse(v)) && new Date(v) <= new Date(),
-    'Date of birth can’t be in the future.',
-  );
+  .refine((v) => {
+    const parsed = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === v;
+  }, 'Use the format YYYY-MM-DD.')
+  .refine((v) => {
+    const parsed = new Date(`${v}T00:00:00Z`);
+    return parsed.getTime() <= Date.now();
+  }, 'Date of birth can’t be in the future.');
 
 export const patientInputSchema = z
   .object({

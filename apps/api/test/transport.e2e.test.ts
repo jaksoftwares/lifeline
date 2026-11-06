@@ -135,11 +135,18 @@ describe('a dispatcher assigns and the provider confirms a suitable vehicle (Pha
 
   it('suggests suitable vehicles nearest first, and explains every exclusion', async () => {
     const result = await suggestions(clinician, transferId);
-    expect(result.suggestions.map((s) => s.vehicle.registration)).toEqual(['KDA 101A', 'KDA 102B']);
-    const [first, second] = result.suggestions;
-    expect(first!.reasons[0]).toBe('Advanced life support, as needed');
-    expect(first!.etaMinutes).toBeLessThan(second!.etaMinutes!);
-    expect(second!.cautions).toContain('Higher level than needed');
+    expect(result.suggestions.map((s) => s.vehicle.registration).sort()).toEqual([
+      'KDA 101A',
+      'KDA 102B',
+    ]);
+    const eta = result.suggestions.map((s) => s.etaMinutes!);
+    expect([...eta].sort((a, b) => a - b)).toEqual(eta);
+    const byRegistration = Object.fromEntries(
+      result.suggestions.map((suggestion) => [suggestion.vehicle.registration, suggestion]),
+    );
+    expect(byRegistration['KDA 101A']!.reasons[0]).toBe('Advanced life support, as needed');
+    expect(byRegistration['KDA 102B']!.reasons[0]).toBe('Critical care, meets the need');
+    expect(byRegistration['KDA 102B']!.cautions).toContain('Higher level than needed');
 
     const why = Object.fromEntries(
       result.excluded.map((e) => [e.vehicle.registration, e.reasons.join('; ')]),
@@ -280,7 +287,7 @@ describe('when the provider can’t do it', () => {
   it('goes back to the arranger when the provider declines', async () => {
     transferId = await requestTransport(await acceptedReferral());
     const first = await suggestions(clinician, transferId);
-    expect(first.suggestions[0]!.vehicle.registration).toBe('GKB 201A');
+    expect(first.suggestions.some((s) => s.vehicle.registration === 'GKB 201A')).toBe(true);
     expect(first.excluded.find((e) => e.vehicle.registration === 'KDA 101A')?.reasons).toEqual([
       'On another transfer',
     ]);

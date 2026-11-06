@@ -203,6 +203,16 @@ enum ExternalTransportService {
   OTHER
 }
 
+enum TransportPayer {
+  REFERRING_FACILITY
+  RECEIVING_FACILITY
+  COUNTY_GOVERNMENT
+  NATIONAL_GOVERNMENT
+  PATIENT_OR_FAMILY
+  INSURER
+  OTHER
+}
+
 enum TransferEventType {
   REQUESTED
   UPDATED
@@ -221,6 +231,9 @@ enum TransferEventType {
   ARRIVED
   INTERRUPTED
   RESUMED
+  HANDED_OVER
+  COST_RECORDED
+  COMPLETED
 }
 
 enum EventSource {
@@ -241,6 +254,23 @@ enum Role {
   AUDITOR
 }
 
+enum NotificationChannel {
+  IN_APP
+  SMS
+  PUSH
+  EMAIL
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  DELIVERED
+  UNCONFIGURED
+  FAILED
+  SKIPPED
+}
+
 /// A referral network, e.g. a county or a referral hospital and its feeder facilities. The tenant boundary.
 model Network {
   id                             String            @id @default(cuid())
@@ -254,18 +284,21 @@ model Network {
   referralSequence               Int               @default(0)
   /// Vehicles whose availability hasn't been confirmed for longer than this are not suggested.
   vehicleStatusStaleAfterMinutes Int               @default(720)
+  /// Minutes before an unanswered referral request is escalated to network operations.
+  referralEscalationMinutes      Int               @default(15)
   createdAt                      DateTime          @default(now())
   updatedAt                      DateTime          @updatedAt
 
-  institutions Institution[]
-  memberships  Membership[]
-  auditEvents  AuditEvent[]
-  services     Service[]
-  resources    CapacityResource[]
-  patients     Patient[]
-  referrals    Referral[]
-  vehicles     Vehicle[]
-  transfers    Transfer[]
+  institutions  Institution[]
+  memberships   Membership[]
+  auditEvents   AuditEvent[]
+  services      Service[]
+  resources     CapacityResource[]
+  patients      Patient[]
+  referrals     Referral[]
+  vehicles      Vehicle[]
+  transfers     Transfer[]
+  notifications Notification[]
 }
 
 /// A healthcare facility or an ambulance provider participating in a network.
@@ -308,6 +341,7 @@ model Institution {
   transfersTo         Transfer[]           @relation("destination")
   dispatchAssignments DispatchAssignment[]
   transferEvents      TransferEvent[]
+  notifications       Notification[]
 
   @@unique([networkId, code])
   @@index([networkId, type])
@@ -352,13 +386,16 @@ model User {
   attachmentsUploaded Attachment[]
   referralEvents      ReferralEvent[]
 
-  vehicleStatusUpdates Vehicle[]
-  crewProfiles         CrewMember[]
-  transfersRequested   Transfer[]
-  assignmentsProposed  DispatchAssignment[] @relation("assignmentProposedBy")
-  assignmentsAnswered  DispatchAssignment[] @relation("assignmentRespondedBy")
-  transferEvents       TransferEvent[]
-  locationPings        LocationPing[]
+  vehicleStatusUpdates   Vehicle[]
+  crewProfiles           CrewMember[]
+  transfersRequested     Transfer[]
+  assignmentsProposed    DispatchAssignment[] @relation("assignmentProposedBy")
+  assignmentsAnswered    DispatchAssignment[] @relation("assignmentRespondedBy")
+  transferEvents         TransferEvent[]
+  locationPings          LocationPing[]
+  handoversSigned        Handover[]
+  transportCostsRecorded TransferCost[]
+  notifications          Notification[]
 }
 
 /// A role held by a user, either at one institution or (institutionId null) across a network.
@@ -614,6 +651,8 @@ model ReferralRequest {
   readyAt               DateTime?
   withdrawnAt           DateTime?
   withdrawReason        String?
+  escalationDueAt       DateTime?
+  escalatedAt           DateTime?
 
   messages    ReferralMessage[]
   events      ReferralEvent[]
@@ -621,6 +660,45 @@ model ReferralRequest {
 
   @@unique([referralId, institutionId])
   @@index([institutionId, status])
+  @@index([status, escalationDueAt, escalatedAt])
+}
+
+/// A minimum-necessary alert for one active recipient. The event key makes fan-out idempotent.
+model Notification {
+  id            String                 @id @default(cuid())
+  userId        String
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  networkId     String
+  network       Network                @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  institutionId String?
+  institution   Institution?           @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  recipientRole Role
+  eventType     String
+  eventKey      String
+  title         String
+  message       String
+  entityType    String
+  entityId      String
+  createdAt     DateTime               @default(now())
+  readAt        DateTime?
+  deliveries    NotificationDelivery[]
+
+  @@unique([userId, eventKey])
+  @@index([userId, networkId, createdAt])
+}
+
+/// Delivery state is explicit per channel; email is queued for Postmark when configured.
+model NotificationDelivery {
+  id             String                     @id @default(cuid())
+  notificationId String
+  notification   Notification               @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel        NotificationChannel
+  status         NotificationDeliveryStatus
+  attemptedAt    DateTime?
+  error          String?
+
+  @@unique([notificationId, channel])
+  @@index([channel, status])
 }
 
 /// Conversation between the referring facility and one receiving facility. Append-only.
@@ -737,11 +815,24 @@ model Vehicle {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  assignments DispatchAssignment[]
-  locations   LocationPing[]
+  assignments  DispatchAssignment[]
+  locations    LocationPing[]
+  statusEvents VehicleStatusEvent[]
 
   @@unique([networkId, registration])
   @@index([institutionId])
+}
+
+/// Append-only availability timeline used to calculate fleet utilisation.
+model VehicleStatusEvent {
+  id           String        @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  status       VehicleStatus
+  recordStatus RecordStatus
+  recordedAt   DateTime      @default(now())
+
+  @@index([vehicleId, recordedAt])
 }
 
 /// A person who crews a provider's ambulances. Linked to a Lifeline account when they use the crew app.
@@ -793,6 +884,8 @@ model Transfer {
   atPickupAt               DateTime?
   collectedAt              DateTime?
   arrivedAt                DateTime?
+  handedOverAt             DateTime?
+  completedAt              DateTime?
   cancelledAt              DateTime?
   cancelReason             String?
   updatedAt                DateTime        @updatedAt
@@ -800,6 +893,8 @@ model Transfer {
   assignments DispatchAssignment[]
   events      TransferEvent[]
   locations   LocationPing[]
+  handover    Handover?
+  cost        TransferCost?
 
   @@index([networkId, status])
   @@index([pickupInstitutionId, status])
@@ -905,4 +1000,38 @@ model LocationPing {
   @@unique([assignmentId, recordedAt])
   @@index([transferId, recordedAt])
   @@index([vehicleId, recordedAt])
+}
+
+/// Receiving clinician's append-only sign-off of the structured patient handover.
+model Handover {
+  id                            String   @id @default(cuid())
+  transferId                    String   @unique
+  transfer                      Transfer @relation(fields: [transferId], references: [id])
+  patientIdentityConfirmed      Boolean
+  clinicalSummaryReceived       Boolean
+  latestObservationsReceived    Boolean
+  treatmentAndAllergiesReviewed Boolean
+  documentsAndResultsAddressed  Boolean
+  notes                         String?
+  signedById                    String
+  signedBy                      User     @relation(fields: [signedById], references: [id])
+  signedAt                      DateTime @default(now())
+
+  @@index([signedById, signedAt])
+}
+
+/// One append-only operational cost per transfer. Payment is handled outside Lifeline.
+model TransferCost {
+  id           String         @id @default(cuid())
+  transferId   String         @unique
+  transfer     Transfer       @relation(fields: [transferId], references: [id])
+  amount       Decimal        @db.Decimal(12, 2)
+  payer        TransportPayer
+  payerName    String?
+  notes        String?
+  recordedById String
+  recordedBy   User           @relation(fields: [recordedById], references: [id])
+  recordedAt   DateTime       @default(now())
+
+  @@index([recordedById, recordedAt])
 }

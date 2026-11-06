@@ -14,6 +14,7 @@ import {
 import { type DispatchAssignment, type Prisma } from '@prisma/client';
 import { type AuthContext, NOT_PERMITTED } from '../auth/auth-context';
 import { type RequestMeta } from '../common/request-meta';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertCanViewTransfer } from './transfer-access';
 import { isUniqueViolation, recordTransferEvent } from './transfer-records';
@@ -30,6 +31,7 @@ export class DispatchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly transfers: TransfersService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async confirm(
@@ -101,6 +103,28 @@ export class DispatchService {
           { vehicle: vehicle.registration },
           assignment.providerId!,
         );
+        await this.notifications.notifyRoles(tx, {
+          networkId: transfer.networkId,
+          institutionId: transfer.pickupInstitutionId,
+          roles: ['REFERRING_CLINICIAN', 'REFERRAL_COORDINATOR'],
+          eventType: 'TRANSFER_CONFIRMED',
+          eventKey: `transfer-confirmed:${assignmentId}:pickup`,
+          title: 'Ambulance confirmed',
+          message: `Transport for referral ${transfer.referral.reference} has been confirmed.`,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
+        await this.notifications.notifyRoles(tx, {
+          networkId: transfer.networkId,
+          institutionId: null,
+          roles: ['NETWORK_OPERATIONS'],
+          eventType: 'TRANSFER_CONFIRMED',
+          eventKey: `transfer-confirmed:${assignmentId}:operations`,
+          title: 'Ambulance confirmed',
+          message: `Transport for referral ${transfer.referral.reference} has been confirmed.`,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
       });
     } catch (error) {
       if (isUniqueViolation(error)) throw new ConflictException(VEHICLE_TAKEN);
@@ -150,6 +174,28 @@ export class DispatchService {
         { reason: input.reason },
         assignment.providerId!,
       );
+      await this.notifications.notifyRoles(tx, {
+        networkId: transfer.networkId,
+        institutionId: transfer.pickupInstitutionId,
+        roles: ['REFERRING_CLINICIAN', 'REFERRAL_COORDINATOR'],
+        eventType: 'TRANSFER_DECLINED',
+        eventKey: `transfer-declined:${assignmentId}:pickup`,
+        title: 'Transport offer declined',
+        message: `The provider declined transport for referral ${transfer.referral.reference}.`,
+        entityType: 'transfer',
+        entityId: transfer.id,
+      });
+      await this.notifications.notifyRoles(tx, {
+        networkId: transfer.networkId,
+        institutionId: null,
+        roles: ['NETWORK_OPERATIONS'],
+        eventType: 'TRANSFER_DECLINED',
+        eventKey: `transfer-declined:${assignmentId}:operations`,
+        title: 'Transport offer declined',
+        message: `The provider declined transport for referral ${transfer.referral.reference}.`,
+        entityType: 'transfer',
+        entityId: transfer.id,
+      });
     });
   }
 
@@ -403,6 +449,9 @@ export class DispatchService {
     await tx.vehicle.update({
       where: { id: vehicleId },
       data: { status: 'AVAILABLE', statusUpdatedAt: at, statusUpdatedById: userId },
+    });
+    await tx.vehicleStatusEvent.create({
+      data: { vehicleId, status: 'AVAILABLE', recordStatus: 'ACTIVE', recordedAt: at },
     });
   }
 }

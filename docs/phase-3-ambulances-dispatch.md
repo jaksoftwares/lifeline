@@ -70,8 +70,7 @@ Vehicle availability in the seed is relative to when it was run, so after 12 hou
 
 ## Follow-ups
 
-1. **Routing-engine travel times** in place of the straight-line estimate, with live positions (Phase 5).
-2. **Crew app** to progress trips from Dispatched to Arrived, with offline support (Phase 4). The API already links crew members to accounts.
-3. **Alerts** for new offers, declines, releases and transfers waiting too long (Phase 7). Until then, lists refresh every 30 seconds and network operations see "No vehicle offered yet" or "Awaiting confirmation from …".
-4. **Transport costs** and payer (Phase 6).
-5. **Per-network levels of care and equipment**, if counties use different classifications.
+1. **Alerts** for new offers, declines, releases and transfers waiting too long (Phase 7). Until then, lists refresh every 30 seconds and network operations see "No vehicle offered yet" or "Awaiting confirmation from …".
+2. **Per-network levels of care and equipment**, if counties use different classifications.
+
+Live positions and optional OSRM road-routing estimates are implemented in [Phase 5](phase-5-live-tracking.md). The crew app is documented in [Phase 4](phase-4-crew-app.md), and trip cost recording in [Phase 6](phase-6-handover-costs.md).

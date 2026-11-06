@@ -5,23 +5,28 @@ import { cn, Logo, Select } from '@lifeline/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Ambulance,
+  BarChart3,
   BedDouble,
+  Bell,
   Building2,
   ClipboardList,
   FileHeart,
   LayoutDashboard,
   LogOut,
   Menu,
+  Radar,
   UserCog,
   Users,
   X,
   Truck,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { api } from '@/lib/api';
+import { useLiveStatus } from '@/lib/live';
 import { useSession } from '@/lib/session';
 
 interface NavItem {
@@ -32,9 +37,10 @@ interface NavItem {
   permission?: Permission | Permission[];
 }
 
-// Modules from later phases (crew app, live tracking, reports, …) are added here as they ship.
+// Modules appear here as their permissions and routes become available.
 const NAV: NavItem[] = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/referrals', label: 'Referrals', icon: FileHeart, permission: 'referral:view' },
   {
     href: '/transfers',
@@ -42,10 +48,23 @@ const NAV: NavItem[] = [
     icon: Ambulance,
     permission: ['transport:request', 'dispatch:assign', 'fleet:view', 'transfers:monitor'],
   },
+  {
+    href: '/operations',
+    label: 'Operations',
+    icon: Radar,
+    permission: 'transfers:monitor',
+  },
   { href: '/fleet', label: 'Fleet', icon: Truck, permission: ['fleet:view', 'dispatch:assign'] },
   { href: '/network', label: 'Facility network', icon: Building2 },
   { href: '/capacity', label: 'Capacity', icon: BedDouble, permission: 'capacity:update' },
   { href: '/admin/users', label: 'Users and roles', icon: Users, permission: 'users:manage' },
+  { href: '/reports', label: 'Success metrics', icon: BarChart3, permission: 'reports:view' },
+  {
+    href: '/admin/network',
+    label: 'Network configuration',
+    icon: Settings,
+    permission: 'network:configure',
+  },
   { href: '/admin/audit', label: 'Audit log', icon: ClipboardList, permission: 'audit:view' },
   { href: '/account', label: 'My account', icon: UserCog },
 ];
@@ -111,7 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="border-t border-white/10 px-5 py-4 text-xs text-white/60">
-          Phase 4 · Crew app
+          Care coordination workspace
         </div>
       </aside>
 
@@ -150,6 +169,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <p className="truncate text-sm font-medium text-ink">{network.name}</p>
           )}
         </div>
+        <LiveIndicator />
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium text-ink">{user.fullName}</p>
           <p className="text-xs text-slate">{user.memberships[0]?.roleLabel}</p>
@@ -191,5 +211,25 @@ export function PageHeader({
       </div>
       {actions}
     </div>
+  );
+}
+
+/** Whether this page is receiving live updates, in words as well as colour. */
+function LiveIndicator() {
+  const status = useLiveStatus();
+  const live = status === 'live';
+  return (
+    <span
+      role="status"
+      className="hidden items-center gap-1.5 text-xs text-slate md:inline-flex"
+      title={
+        live
+          ? 'Changes appear as they happen.'
+          : 'Changes appear within 30 seconds until reconnected.'
+      }
+    >
+      <span aria-hidden className={cn('size-2 rounded-full', live ? 'bg-success' : 'bg-warning')} />
+      {live ? 'Live' : status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+    </span>
   );
 }

@@ -103,6 +103,14 @@ export class FleetService {
             baseLongitude: input.baseLongitude ?? null,
           },
         });
+        await tx.vehicleStatusEvent.create({
+          data: {
+            vehicleId: vehicle.id,
+            status: vehicle.status,
+            recordStatus: vehicle.recordStatus,
+            recordedAt: vehicle.createdAt,
+          },
+        });
         await this.audit.record(
           {
             action: 'vehicle.created',
@@ -153,9 +161,29 @@ export class FleetService {
     ] as const) {
       if (input[key] !== undefined) (data as Record<string, unknown>)[key] = input[key];
     }
+    const statusChanged =
+      input.recordStatus !== undefined && input.recordStatus !== vehicle.recordStatus;
+    if (input.recordStatus === 'ACTIVE' && vehicle.recordStatus === 'INACTIVE') {
+      data.status = 'OFF_DUTY';
+      data.statusNote = null;
+      data.statusUpdatedAt = null;
+      data.statusUpdatedBy = { disconnect: true };
+    }
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.vehicle.update({ where: { id: vehicleId }, data });
+        if (statusChanged) {
+          await tx.vehicleStatusEvent.create({
+            data: {
+              vehicleId,
+              status:
+                input.recordStatus === 'ACTIVE' && vehicle.recordStatus === 'INACTIVE'
+                  ? 'OFF_DUTY'
+                  : vehicle.status,
+              recordStatus: input.recordStatus!,
+            },
+          });
+        }
         await this.audit.record(
           {
             action: 'vehicle.updated',
@@ -209,6 +237,9 @@ export class FleetService {
           statusUpdatedAt: new Date(),
           statusUpdatedById: auth.userId,
         },
+      });
+      await tx.vehicleStatusEvent.create({
+        data: { vehicleId, status: input.status, recordStatus: 'ACTIVE' },
       });
       await this.audit.record(
         {

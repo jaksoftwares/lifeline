@@ -10,12 +10,15 @@ import {
   EXTERNAL_TRANSPORT_SERVICES,
   type ExternalTransportService,
   type Sex,
+  TRANSPORT_PAYERS,
+  type TransportPayer,
   type TransferStatus,
   type Urgency,
   VEHICLE_STATUSES,
   type VehicleStatus,
 } from '@lifeline/domain';
 import { z } from 'zod';
+import { type TrackingView } from './live';
 import { kenyanPhoneNumberSchema, latitudeSchema, longitudeSchema } from './facilities';
 
 const text = (max: number) =>
@@ -66,6 +69,34 @@ export const updateTransferSchema = z.object({
   notes: transferFields.notes,
 });
 export type UpdateTransferInput = z.infer<typeof updateTransferSchema>;
+
+/** A receiving decision-maker confirms the essential clinical handover items. */
+export const handoverSchema = z.object({
+  patientIdentityConfirmed: z.literal(true),
+  clinicalSummaryReceived: z.literal(true),
+  latestObservationsReceived: z.literal(true),
+  treatmentAndAllergiesReviewed: z.literal(true),
+  documentsAndResultsAddressed: z.literal(true),
+  notes: text(1000),
+});
+export type HandoverInput = z.infer<typeof handoverSchema>;
+
+/** Costs are recorded in Kenyan shillings; this records them but does not process payment. */
+export const transportCostSchema = z
+  .object({
+    amount: z
+      .string()
+      .regex(/^\d{1,9}(\.\d{1,2})?$/, 'Enter an amount with no more than two decimal places.')
+      .transform(Number),
+    payer: z.enum(TRANSPORT_PAYERS),
+    payerName: text(120),
+    notes: text(500),
+  })
+  .refine((value) => value.payer !== 'OTHER' || !!value.payerName, {
+    path: ['payerName'],
+    message: 'Name the payer.',
+  });
+export type TransportCostInput = z.infer<typeof transportCostSchema>;
 
 export const offerVehicleSchema = z.object({ vehicleId: id, note: text(500) });
 export type OfferVehicleInput = z.infer<typeof offerVehicleSchema>;
@@ -323,8 +354,14 @@ export interface TransferDetail {
   atPickupAt: string | null;
   collectedAt: string | null;
   arrivedAt: string | null;
+  handedOverAt: string | null;
+  completedAt: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
+  /** Live position and arrival estimate while the ambulance is on its way; null otherwise. */
+  tracking: TrackingView | null;
+  handover: HandoverView | null;
+  cost: TransferCostView | null;
   /** Rough pickup-to-destination drive time. */
   tripMinutes: number | null;
   current: AssignmentView | null;
@@ -338,7 +375,31 @@ export interface TransferDetail {
     dispatchableAssignmentIds: string[];
     /** Can open the referral itself. */
     canViewReferral: boolean;
+    canSignHandover: boolean;
+    canRecordCost: boolean;
+    canComplete: boolean;
   };
+}
+
+export interface HandoverView {
+  patientIdentityConfirmed: boolean;
+  clinicalSummaryReceived: boolean;
+  latestObservationsReceived: boolean;
+  treatmentAndAllergiesReviewed: boolean;
+  documentsAndResultsAddressed: boolean;
+  notes: string | null;
+  signedAt: string;
+  signedBy: PersonRef;
+}
+
+export interface TransferCostView {
+  amount: number;
+  currency: 'KES';
+  payer: TransportPayer;
+  payerName: string | null;
+  notes: string | null;
+  recordedAt: string;
+  recordedBy: PersonRef;
 }
 
 export interface TransferSummary {
@@ -357,6 +418,10 @@ export interface TransferSummary {
   } | null;
   requestedAt: string;
   updatedAt: string;
+  handoverRecorded: boolean;
+  costRecorded: boolean;
+  /** Last position and arrival estimate, for transfers being tracked. */
+  tracking: Pick<TrackingView, 'position' | 'eta'> | null;
   /** Why someone should look at it, e.g. "No vehicle offered yet". */
   attention: string | null;
   nextAction: string | null;

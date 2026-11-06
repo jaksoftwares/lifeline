@@ -8,7 +8,7 @@ import { AlertTriangle, Check } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { useTransferSuggestions } from '@/lib/queries';
-import { useTransferInvalidation } from './transfer-panel';
+import { useTransferInvalidation } from './use-transfer-invalidation';
 
 /**
  * Ranked vehicles with the reasons for each, and the vehicles left out with why. The arranger chooses

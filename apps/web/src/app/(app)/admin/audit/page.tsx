@@ -46,7 +46,7 @@ export default function AuditPage() {
     <>
       <PageHeader
         title="Audit log"
-        description="Sign-ins and administrative changes. Entries cannot be edited or deleted. Times are East Africa Time."
+        description="Sign-ins and administrative changes. Times are East Africa Time."
       />
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-3">

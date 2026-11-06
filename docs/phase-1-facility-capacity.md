@@ -8,7 +8,7 @@
 
 | Criterion from the plan | Result |
 |---|---|
-| A clinician finds suitable facilities by service and travel time | Met. Covered by end-to-end tests and checked on the running app: a clinician at Demo Sub-County Hospital North searching for intensive care sees three facilities, nearest first, each with an estimated drive time and timestamped ICU bed figures; the one with a 9-hour-old report is marked out of date |
+| A clinician finds suitable facilities by service and travel time | Met. Covered by end-to-end tests and checked on the running app: a clinician at Pumwani Maternity Hospital searching for intensive care sees three facilities, nearest first, each with an estimated drive time and timestamped ICU bed figures; the one with a 9-hour-old report is marked out of date |
 
 ## What was built
 

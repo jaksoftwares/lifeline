@@ -282,6 +282,27 @@ export const EXTERNAL_TRANSPORT_LABELS: Record<ExternalTransportService, string>
   OTHER: 'Other transport',
 };
 
+export const TRANSPORT_PAYERS = [
+  'REFERRING_FACILITY',
+  'RECEIVING_FACILITY',
+  'COUNTY_GOVERNMENT',
+  'NATIONAL_GOVERNMENT',
+  'PATIENT_OR_FAMILY',
+  'INSURER',
+  'OTHER',
+] as const;
+export type TransportPayer = (typeof TRANSPORT_PAYERS)[number];
+
+export const TRANSPORT_PAYER_LABELS: Record<TransportPayer, string> = {
+  REFERRING_FACILITY: 'Referring facility',
+  RECEIVING_FACILITY: 'Receiving facility',
+  COUNTY_GOVERNMENT: 'County government',
+  NATIONAL_GOVERNMENT: 'National government',
+  PATIENT_OR_FAMILY: 'Patient or family',
+  INSURER: 'Insurer',
+  OTHER: 'Other',
+};
+
 // ---- Vehicle suggestions ----
 
 export interface VehicleCandidate {

@@ -63,13 +63,15 @@ export function useReferrals(
   networkId: string,
   box: 'outgoing' | 'incoming' | 'network',
   open: boolean,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ['referrals', networkId, box, open],
     queryFn: () =>
       api<ReferralSummary[]>('/referrals', { query: { networkId, box, open: String(open) } }),
+    enabled,
     placeholderData: keepPreviousData,
-    // Until live updates arrive (Phase 5), inboxes refresh every 30 seconds.
+    // Keep inbox data current alongside live updates.
     refetchInterval: 30_000,
   });
 }
@@ -86,11 +88,13 @@ export function useTransfers(
   networkId: string,
   box: 'facility' | 'provider' | 'network',
   open: boolean,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ['transfers', networkId, box, open],
     queryFn: () =>
       api<TransferSummary[]>('/transfers', { query: { networkId, box, open: String(open) } }),
+    enabled,
     placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   });
@@ -115,10 +119,11 @@ export function useTransferSuggestions(transferId: string, enabled: boolean) {
   });
 }
 
-export function useVehicles(networkId: string, providerId?: string) {
+export function useVehicles(networkId: string, providerId?: string, enabled = true) {
   return useQuery({
     queryKey: ['vehicles', networkId, providerId ?? 'all'],
     queryFn: () => api<VehicleView[]>(`/networks/${networkId}/vehicles`, { query: { providerId } }),
+    enabled,
     refetchInterval: 60_000,
   });
 }

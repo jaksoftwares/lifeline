@@ -18,7 +18,7 @@ export default function NetworkPage() {
     <>
       <PageHeader
         title="Facility network"
-        description="Find a receiving facility by the services and capacity a patient needs, or browse every participating institution."
+        description="Find a facility by service and capacity, or browse the network."
       />
       <div
         role="tablist"

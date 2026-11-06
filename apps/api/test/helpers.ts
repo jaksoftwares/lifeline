@@ -112,3 +112,15 @@ export async function demoIds(app: INestApplication) {
     resource: (code: string) => resources.find((r) => r.code === code)!.id,
   };
 }
+
+/** Signs in the way the crew app does (tokens in the body) and returns the access token. */
+export async function bearerToken(app: INestApplication, email: string): Promise<string> {
+  const res = await request(app.getHttpServer())
+    .post('/api/auth/login')
+    .set('X-Lifeline-Client', 'mobile')
+    .send({ email, password: TEST_PASSWORD });
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  const body = res.body as AuthStepResponse;
+  if (body.step !== 'AUTHENTICATED' || !body.tokens) throw new Error(`No tokens for ${email}`);
+  return body.tokens.accessToken;
+}

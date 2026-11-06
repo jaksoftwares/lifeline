@@ -15,6 +15,15 @@ import { FacilitiesService } from './facilities/facilities.service';
 import { CrewController } from './crew/crew.controller';
 import { CrewService } from './crew/crew.service';
 import { HealthController } from './health/health.controller';
+import { LiveController } from './live/live.controller';
+import { LiveService } from './live/live.service';
+import { NotificationsController } from './notifications/notifications.controller';
+import { NotificationsService } from './notifications/notifications.service';
+import { PostmarkEmailService } from './notifications/postmark-email.service';
+import { ReportsController } from './reports/reports.controller';
+import { ReportsService } from './reports/reports.service';
+import { RoutingService } from './live/routing.service';
+import { TrackingService } from './live/tracking.service';
 import { InstitutionsController } from './institutions/institutions.controller';
 import { PrismaService } from './prisma/prisma.service';
 import { AssessmentsService } from './referrals/assessments.service';
@@ -48,7 +57,10 @@ import { UsersService } from './users/users.service';
     FleetController,
     TransfersController,
     CrewController,
+    LiveController,
     AuditController,
+    NotificationsController,
+    ReportsController,
     HealthController,
   ],
   providers: [
@@ -68,6 +80,12 @@ import { UsersService } from './users/users.service';
     TransfersService,
     DispatchService,
     CrewService,
+    LiveService,
+    RoutingService,
+    TrackingService,
+    NotificationsService,
+    PostmarkEmailService,
+    ReportsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

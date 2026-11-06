@@ -3,6 +3,7 @@
 import { Alert, Button, Loading } from '@lifeline/ui';
 import { type ReactNode } from 'react';
 import { AppShell } from '@/components/app-shell';
+import { LiveUpdatesProvider } from '@/lib/live';
 import { SessionProvider, useMe } from '@/lib/session';
 
 export default function SignedInLayout({ children }: { children: ReactNode }) {
@@ -33,7 +34,9 @@ export default function SignedInLayout({ children }: { children: ReactNode }) {
 
   return (
     <SessionProvider user={me.data}>
-      <AppShell>{children}</AppShell>
+      <LiveUpdatesProvider>
+        <AppShell>{children}</AppShell>
+      </LiveUpdatesProvider>
     </SessionProvider>
   );
 }

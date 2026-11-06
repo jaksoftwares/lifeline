@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { PageHeader } from '@/components/app-shell';
 import { UrgencyChip } from '@/components/referral-chips';
 import { TransferStatusChip } from '@/components/transport-chips';
-import { formatAgo } from '@/lib/format';
+import { formatAgo, formatMinutes } from '@/lib/format';
 import { useTransfers } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 
@@ -126,6 +126,14 @@ function TransferRow({ transfer: t }: { transfer: TransferSummary }) {
                 ` · ${[current.providerName, current.vehicleRegistration].filter(Boolean).join(' · ')}`}
             </p>
             {t.attention && <p className="text-sm font-medium text-ink">{t.attention}</p>}
+            {t.tracking?.position && (
+              <p className="text-xs text-slate">
+                Position {formatAgo(t.tracking.position.recordedAt)}
+                {t.tracking.position.freshness !== 'LIVE' && ' (out of date)'}
+                {t.tracking.eta &&
+                  ` · about ${formatMinutes(t.tracking.eta.minutes)} to ${t.tracking.eta.target === 'PICKUP' ? 'pickup' : 'destination'}`}
+              </p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <div className="flex flex-wrap justify-end gap-1.5">

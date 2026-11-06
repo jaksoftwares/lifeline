@@ -14,12 +14,15 @@ import {
   permittedInstitutionIds,
   PRE_COLLECTION_STATUSES,
   rankVehicles,
+  TRANSPORT_PAYER_LABELS,
 } from '@lifeline/domain';
 import {
   type ExternalTransportInput,
+  type HandoverInput,
   type ListTransfersQuery,
   type OfferVehicleInput,
   type SuggestionsResponse,
+  type TransportCostInput,
   type TransferDetail,
   type TransferRequestInput,
   type TransferSummary,
@@ -29,6 +32,8 @@ import { type Institution, type Prisma, type Transfer } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { type AuthContext, NOT_PERMITTED } from '../auth/auth-context';
 import { type RequestMeta } from '../common/request-meta';
+import { TrackingService } from '../live/tracking.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { patientAge, patientDisplayName } from '../referrals/mappers';
 import { assertCanView, referralAccess } from '../referrals/referral-access';
@@ -49,6 +54,9 @@ import {
 } from './transfer-access';
 import { cancelTransfer, isUniqueViolation, recordTransferEvent } from './transfer-records';
 
+const placeWithCoordinates = {
+  select: { id: true, name: true, latitude: true, longitude: true },
+} as const;
 const VIEW_AUDIT_INTERVAL_MS = 15 * 60 * 1000;
 const LIST_LIMIT = 100;
 const ALREADY_OFFERED =
@@ -59,6 +67,8 @@ export class TransfersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly tracking: TrackingService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Raised by the referring facility (or network operations) once a receiving facility has accepted. */
@@ -115,6 +125,17 @@ export class TransfersService {
           'transfer.requested',
           meta,
         );
+        await this.notifications.notifyRoles(tx, {
+          networkId: referral.networkId,
+          institutionId: null,
+          roles: ['NETWORK_OPERATIONS'],
+          eventType: 'TRANSFER_REQUESTED',
+          eventKey: `transfer-requested:${transfer.id}`,
+          title: 'Transport requested',
+          message: `Referral ${referral.reference} needs transport coordination.`,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
         return { id: transfer.id };
       });
     } catch (error) {
@@ -303,6 +324,17 @@ export class TransfersService {
             vehicle: chosen.vehicle.registration,
           },
         );
+        await this.notifications.notifyRoles(tx, {
+          networkId: transfer.networkId,
+          institutionId: chosen.vehicle.institutionId,
+          roles: ['DISPATCHER', 'PROVIDER_ADMIN'],
+          eventType: 'TRANSFER_OFFERED',
+          eventKey: `transfer-offer:${assignment.id}`,
+          title: 'Transport offer received',
+          message: `Your vehicle has been offered for referral ${transfer.referral.reference}.`,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
         return { id: assignment.id };
       });
     } catch (error) {
@@ -427,6 +459,222 @@ export class TransfersService {
     });
   }
 
+  /** The receiving decision-maker signs the checklist after the ambulance has arrived. */
+  async signHandover(
+    auth: AuthContext,
+    transferId: string,
+    input: HandoverInput,
+    meta: RequestMeta,
+  ): Promise<void> {
+    const { transfer, access } = await this.load(auth, transferId);
+    assertCanViewTransfer(access);
+    if (!access.canSignHandover) throw new ForbiddenException(NOT_PERMITTED);
+    if (transfer.status !== 'ARRIVED')
+      throw new ConflictException('Handover can be signed only after the ambulance has arrived.');
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.transfer.updateMany({
+        where: { id: transferId, status: 'ARRIVED' },
+        data: { status: 'HANDED_OVER', handedOverAt: now },
+      });
+      if (count === 0)
+        throw new ConflictException('This transfer has already moved on from arrival.');
+      await tx.handover.create({
+        data: {
+          transferId,
+          ...input,
+          signedById: auth.userId,
+          signedAt: now,
+        },
+      });
+      await recordTransferEvent(tx, {
+        transferId,
+        type: 'HANDED_OVER',
+        actorId: auth.userId,
+        institutionId: transfer.destinationInstitutionId,
+        note: input.notes,
+        at: now,
+      });
+      await this.audit.record(
+        {
+          action: 'transfer.handover_signed',
+          entityType: 'transfer',
+          entityId: transferId,
+          actorId: auth.userId,
+          networkId: transfer.networkId,
+          institutionId: transfer.destinationInstitutionId,
+          metadata: { reference: transfer.referral.reference },
+          meta,
+        },
+        tx,
+      );
+      const message = `The receiving team signed handover for referral ${transfer.referral.reference}.`;
+      await this.notifications.notifyRoles(tx, {
+        networkId: transfer.networkId,
+        institutionId: transfer.pickupInstitutionId,
+        roles: ['REFERRING_CLINICIAN', 'REFERRAL_COORDINATOR'],
+        eventType: 'TRANSFER_HANDED_OVER',
+        eventKey: `transfer-handover:${transferId}:pickup`,
+        title: 'Patient handover signed',
+        message,
+        entityType: 'transfer',
+        entityId: transfer.id,
+      });
+      await this.notifications.notifyRoles(tx, {
+        networkId: transfer.networkId,
+        institutionId: null,
+        roles: ['NETWORK_OPERATIONS'],
+        eventType: 'TRANSFER_HANDED_OVER',
+        eventKey: `transfer-handover:${transferId}:operations`,
+        title: 'Patient handover signed',
+        message,
+        entityType: 'transfer',
+        entityId: transfer.id,
+      });
+    });
+  }
+
+  /** Records the agreed trip cost once; Lifeline does not collect or process payment. */
+  async recordCost(
+    auth: AuthContext,
+    transferId: string,
+    input: TransportCostInput,
+    meta: RequestMeta,
+  ): Promise<void> {
+    const { transfer, access } = await this.load(auth, transferId);
+    assertCanViewTransfer(access);
+    if (!access.canRecordCost) throw new ForbiddenException(NOT_PERMITTED);
+    if (transfer.status !== 'ARRIVED' && transfer.status !== 'HANDED_OVER') {
+      throw new ConflictException('Trip cost can be recorded after arrival and before completion.');
+    }
+
+    const now = new Date();
+    const institutionId = access.canArrange
+      ? transfer.pickupInstitutionId
+      : (transfer.assignments.find((a) => access.dispatchableAssignmentIds.includes(a.id))
+          ?.providerId ?? transfer.pickupInstitutionId);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.transferCost.create({
+          data: {
+            transferId,
+            amount: input.amount.toFixed(2),
+            payer: input.payer,
+            payerName: input.payerName ?? null,
+            notes: input.notes ?? null,
+            recordedById: auth.userId,
+            recordedAt: now,
+          },
+        });
+        await recordTransferEvent(tx, {
+          transferId,
+          type: 'COST_RECORDED',
+          actorId: auth.userId,
+          institutionId,
+          note: `KES ${input.amount.toFixed(2)} recorded; payer: ${input.payerName ?? TRANSPORT_PAYER_LABELS[input.payer]}`,
+          at: now,
+        });
+        await this.audit.record(
+          {
+            action: 'transfer.cost_recorded',
+            entityType: 'transfer',
+            entityId: transferId,
+            actorId: auth.userId,
+            networkId: transfer.networkId,
+            institutionId,
+            metadata: {
+              reference: transfer.referral.reference,
+              amount: input.amount.toFixed(2),
+              currency: 'KES',
+              payer: input.payer,
+              payerName: input.payerName ?? null,
+            },
+            meta,
+          },
+          tx,
+        );
+      });
+    } catch (error) {
+      if (isUniqueViolation(error))
+        throw new ConflictException('A trip cost has already been recorded for this transfer.');
+      throw error;
+    }
+  }
+
+  /** Closes the transfer and releases the confirmed vehicle after sign-off and cost recording. */
+  async complete(auth: AuthContext, transferId: string, meta: RequestMeta): Promise<void> {
+    const { transfer, access } = await this.load(auth, transferId);
+    assertCanViewTransfer(access);
+    if (!access.canSignHandover) throw new ForbiddenException(NOT_PERMITTED);
+    if (transfer.status !== 'HANDED_OVER')
+      throw new ConflictException('The receiving team must sign the handover first.');
+
+    await this.prisma.$transaction(async (tx) => {
+      const [handover, cost] = await Promise.all([
+        tx.handover.findUnique({ where: { transferId }, select: { id: true } }),
+        tx.transferCost.findUnique({ where: { transferId }, select: { id: true } }),
+      ]);
+      if (!handover) throw new ConflictException('A signed handover is required to complete.');
+      if (!cost)
+        throw new ConflictException('Record the trip cost before completing the transfer.');
+
+      const now = new Date();
+      const { count } = await tx.transfer.updateMany({
+        where: { id: transferId, status: 'HANDED_OVER' },
+        data: { status: 'COMPLETED', completedAt: now },
+      });
+      if (count === 0) throw new ConflictException('This transfer has already been completed.');
+      await tx.dispatchAssignment.updateMany({
+        where: { transferId, status: { in: [...OPEN_ASSIGNMENT_STATUSES] } },
+        data: { status: 'COMPLETED', endedAt: now },
+      });
+      await recordTransferEvent(tx, {
+        transferId,
+        type: 'COMPLETED',
+        actorId: auth.userId,
+        institutionId: transfer.destinationInstitutionId,
+        at: now,
+      });
+      await this.audit.record(
+        {
+          action: 'transfer.completed',
+          entityType: 'transfer',
+          entityId: transferId,
+          actorId: auth.userId,
+          networkId: transfer.networkId,
+          institutionId: transfer.destinationInstitutionId,
+          metadata: { reference: transfer.referral.reference },
+          meta,
+        },
+        tx,
+      );
+      const message = `Transfer for referral ${transfer.referral.reference} is complete.`;
+      await this.notifications.notifyRoles(tx, {
+        networkId: transfer.networkId,
+        institutionId: transfer.pickupInstitutionId,
+        roles: ['REFERRING_CLINICIAN', 'REFERRAL_COORDINATOR'],
+        eventType: 'TRANSFER_COMPLETED',
+        eventKey: `transfer-completed:${transferId}:pickup`,
+        title: 'Transfer completed',
+        message,
+        entityType: 'transfer',
+        entityId: transfer.id,
+      });
+      await this.notifications.notifyRoles(tx, {
+        networkId: transfer.networkId,
+        institutionId: null,
+        roles: ['NETWORK_OPERATIONS'],
+        eventType: 'TRANSFER_COMPLETED',
+        eventKey: `transfer-completed:${transferId}:operations`,
+        title: 'Transfer completed',
+        message,
+        entityType: 'transfer',
+        entityId: transfer.id,
+      });
+    });
+  }
+
   async detail(auth: AuthContext, transferId: string, meta: RequestMeta): Promise<TransferDetail> {
     const transfer = await this.prisma.transfer.findUnique({
       where: { id: transferId },
@@ -439,6 +687,8 @@ export class TransfersService {
         requestedBy: person,
         assignments: { include: assignmentInclude, orderBy: { proposedAt: 'asc' } },
         events: { include: { actor: person, institution: place }, orderBy: { occurredAt: 'asc' } },
+        handover: { include: { signedBy: person } },
+        cost: { include: { recordedBy: person } },
       },
     });
     if (!transfer) throw new NotFoundException('Transfer not found.');
@@ -486,8 +736,43 @@ export class TransfersService {
       atPickupAt: transfer.atPickupAt?.toISOString() ?? null,
       collectedAt: transfer.collectedAt?.toISOString() ?? null,
       arrivedAt: transfer.arrivedAt?.toISOString() ?? null,
+      handedOverAt: transfer.handedOverAt?.toISOString() ?? null,
+      completedAt: transfer.completedAt?.toISOString() ?? null,
       cancelledAt: transfer.cancelledAt?.toISOString() ?? null,
       cancelReason: transfer.cancelReason,
+      tracking: await this.tracking.forTransfer({
+        id: transfer.id,
+        status: transfer.status,
+        pickup: transfer.pickupInstitution,
+        destination: transfer.destinationInstitution,
+        // Everyone sees the same position, whichever assignments they may see.
+        vehicleId:
+          transfer.assignments.find((a) => OPEN_ASSIGNMENT_STATUSES.includes(a.status))
+            ?.vehicleId ?? null,
+      }),
+      handover: transfer.handover
+        ? {
+            patientIdentityConfirmed: transfer.handover.patientIdentityConfirmed,
+            clinicalSummaryReceived: transfer.handover.clinicalSummaryReceived,
+            latestObservationsReceived: transfer.handover.latestObservationsReceived,
+            treatmentAndAllergiesReviewed: transfer.handover.treatmentAndAllergiesReviewed,
+            documentsAndResultsAddressed: transfer.handover.documentsAndResultsAddressed,
+            notes: transfer.handover.notes,
+            signedAt: transfer.handover.signedAt.toISOString(),
+            signedBy: transfer.handover.signedBy,
+          }
+        : null,
+      cost: transfer.cost
+        ? {
+            amount: Number(transfer.cost.amount.toFixed(2)),
+            currency: 'KES',
+            payer: transfer.cost.payer,
+            payerName: transfer.cost.payerName,
+            notes: transfer.cost.notes,
+            recordedAt: transfer.cost.recordedAt.toISOString(),
+            recordedBy: transfer.cost.recordedBy,
+          }
+        : null,
       tripMinutes: tripMinutes(transfer.pickupInstitution, transfer.destinationInstitution),
       current: current ? toAssignmentView(current) : null,
       assignments: assignments.map(toAssignmentView),
@@ -505,6 +790,9 @@ export class TransfersService {
           visibleIds.has(id),
         ),
         canViewReferral: access.canViewReferral,
+        canSignHandover: access.canSignHandover,
+        canRecordCost: access.canRecordCost,
+        canComplete: access.canSignHandover,
       },
     };
   }
@@ -555,16 +843,29 @@ export class TransfersService {
       where,
       include: {
         referral: { include: { patient: true } },
-        pickupInstitution: place,
-        destinationInstitution: place,
+        pickupInstitution: placeWithCoordinates,
+        destinationInstitution: placeWithCoordinates,
         assignments: {
           include: { provider: place, vehicle: { select: { registration: true } } },
           orderBy: { proposedAt: 'asc' },
         },
+        handover: { select: { id: true } },
+        cost: { select: { id: true } },
       },
       orderBy: { updatedAt: 'desc' },
       take: LIST_LIMIT,
     });
+
+    const tracking = await this.tracking.forTransfers(
+      transfers.map((t) => ({
+        id: t.id,
+        status: t.status,
+        pickup: t.pickupInstitution,
+        destination: t.destinationInstitution,
+        vehicleId:
+          t.assignments.find((a) => OPEN_ASSIGNMENT_STATUSES.includes(a.status))?.vehicleId ?? null,
+      })),
+    );
 
     return transfers.map((t) => {
       const access = transferAccess(auth, t);
@@ -585,9 +886,10 @@ export class TransfersService {
         patient: access.seesPatient
           ? { displayName: patientDisplayName(t.referral.patient) }
           : null,
-        pickup: t.pickupInstitution,
-        destination: t.destinationInstitution,
+        pickup: { id: t.pickupInstitution.id, name: t.pickupInstitution.name },
+        destination: { id: t.destinationInstitution.id, name: t.destinationInstitution.name },
         requiredCapability: t.requiredCapability,
+        tracking: tracking.get(t.id) ?? null,
         current: current
           ? {
               status: current.status,
@@ -598,8 +900,10 @@ export class TransfersService {
           : null,
         requestedAt: t.requestedAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
-        attention: attention(t, current, last),
-        nextAction: nextAction(t, current, access),
+        handoverRecorded: t.handover !== null,
+        costRecorded: t.cost !== null,
+        attention: attention(t, current, last, t.handover !== null, t.cost !== null),
+        nextAction: nextAction(t, current, access, t.handover !== null, t.cost !== null),
       };
     });
   }
@@ -760,7 +1064,12 @@ function attention(
   t: { status: string },
   current: SummaryAssignment | null,
   last: SummaryAssignment | undefined,
+  handoverRecorded: boolean,
+  costRecorded: boolean,
 ): string | null {
+  if (t.status === 'ARRIVED' && !handoverRecorded) return 'Awaiting receiving handover';
+  if (t.status === 'HANDED_OVER' && !costRecorded) return 'Trip cost not yet recorded';
+  if (t.status === 'HANDED_OVER' && costRecorded) return 'Ready to complete transfer';
   if (t.status !== 'AWAITING_TRANSPORT') return null;
   if (current) return `Awaiting confirmation from ${current.provider?.name ?? 'the provider'}`;
   if (last?.status === 'DECLINED')
@@ -773,8 +1082,19 @@ function nextAction(
   t: { status: string },
   current: { id: string; status: string; kind: string } | null,
   access: TransferAccess,
+  handoverRecorded: boolean,
+  costRecorded: boolean,
 ): string | null {
   if (t.status === 'AWAITING_TRANSPORT' && !current && access.canArrange) return 'Offer a vehicle';
+  if (t.status === 'ARRIVED' && access.canSignHandover && !handoverRecorded) return 'Sign handover';
+  if (
+    (t.status === 'ARRIVED' || t.status === 'HANDED_OVER') &&
+    access.canRecordCost &&
+    !costRecorded
+  )
+    return 'Record trip cost';
+  if (t.status === 'HANDED_OVER' && access.canSignHandover && costRecorded)
+    return 'Complete transfer';
   if (current && access.dispatchableAssignmentIds.includes(current.id)) {
     if (current.status === 'PROPOSED') return 'Confirm or decline';
     if (t.status === 'AMBULANCE_ASSIGNED') return 'Dispatch the ambulance';

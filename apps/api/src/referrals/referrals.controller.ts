@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { Auth, AuthContext } from '../auth/auth-context';
 import { Meta, RequestMeta } from '../common/request-meta';
 import { ZodPipe } from '../common/zod.pipe';
+import { LiveService } from '../live/live.service';
 import { AssessmentsService } from './assessments.service';
 import { AttachmentsService, MAX_ATTACHMENT_BYTES } from './attachments.service';
 import { ReferralsService } from './referrals.service';
@@ -46,6 +47,7 @@ export class ReferralsController {
     private readonly responses: ResponsesService,
     private readonly assessments: AssessmentsService,
     private readonly attachments: AttachmentsService,
+    private readonly live: LiveService,
   ) {}
 
   @Get('referrals')
@@ -108,13 +110,14 @@ export class ReferralsController {
 
   @Post('referrals/:referralId/cancel')
   @HttpCode(204)
-  cancel(
+  async cancel(
     @Auth() auth: AuthContext,
     @Param('referralId') referralId: string,
     @Body(new ZodPipe(reasonSchema)) body: z.infer<typeof reasonSchema>,
     @Meta() meta: RequestMeta,
   ) {
-    return this.referrals.cancel(auth, referralId, body.reason, meta);
+    await this.referrals.cancel(auth, referralId, body.reason, meta);
+    void this.live.referralChanged(referralId);
   }
 
   @Post('referrals/:referralId/assessments')

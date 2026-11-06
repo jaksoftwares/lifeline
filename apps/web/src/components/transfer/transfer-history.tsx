@@ -47,6 +47,12 @@ function describe(e: TransferEventView): string {
       return 'Left for the receiving facility';
     case 'ARRIVED':
       return 'Arrived at the receiving facility';
+    case 'HANDED_OVER':
+      return 'Patient handover signed by the receiving facility';
+    case 'COST_RECORDED':
+      return 'Trip cost recorded';
+    case 'COMPLETED':
+      return 'Transfer completed';
     case 'INTERRUPTED':
       return 'Problem reported by the crew';
     case 'RESUMED':

@@ -48,7 +48,7 @@ export default function UsersPage() {
     <>
       <PageHeader
         title="Users and roles"
-        description="People who can sign in, and the roles they hold. You see only the places where you manage users."
+        description="Manage accounts and roles in your facilities."
         actions={
           !adding && (
             <Button onClick={() => setAdding(true)}>

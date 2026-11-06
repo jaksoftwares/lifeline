@@ -20,8 +20,11 @@ describe('patientInputSchema', () => {
     ).toBe(true);
   });
 
-  it('rejects a date of birth in the future', () => {
+  it('rejects a date of birth in the future or with an impossible calendar value', () => {
     expect(patientInputSchema.safeParse({ sex: 'FEMALE', dateOfBirth: '2999-01-01' }).success).toBe(
+      false,
+    );
+    expect(patientInputSchema.safeParse({ sex: 'FEMALE', dateOfBirth: '2024-02-30' }).success).toBe(
       false,
     );
   });

@@ -17,7 +17,13 @@ afterAll(async () => {
   await app.close();
 });
 
-async function createTestUser(email: string, options: { mustChangePassword?: boolean } = {}) {
+async function createTestUser(
+  email: string,
+  options: {
+    mustChangePassword?: boolean;
+    role?: 'REFERRING_CLINICIAN' | 'FACILITY_ADMIN';
+  } = {},
+) {
   const ids = await demoIds(app);
   return prismaOf(app).user.create({
     data: {
@@ -26,7 +32,11 @@ async function createTestUser(email: string, options: { mustChangePassword?: boo
       passwordHash: await hashPassword(TEST_PASSWORD),
       mustChangePassword: options.mustChangePassword ?? false,
       memberships: {
-        create: { networkId: ids.networkId, institutionId: ids.north, role: 'REFERRING_CLINICIAN' },
+        create: {
+          networkId: ids.networkId,
+          institutionId: ids.north,
+          role: options.role ?? 'REFERRING_CLINICIAN',
+        },
       },
     },
   });
@@ -117,9 +127,10 @@ describe('first sign-in with a temporary password', () => {
 });
 
 describe('two-step verification', () => {
-  const email = 'admin.national@demo.lifeline.test';
+  const email = 'mfaadmin@demo.lifeline.test';
 
   it('makes administrators enrol before they get a session', async () => {
+    await createTestUser(email, { role: 'FACILITY_ADMIN' });
     const login = await http().post('/api/auth/login').send({ email, password: TEST_PASSWORD });
     expect(login.body.step).toBe('MFA_SETUP_REQUIRED');
     const { challengeToken } = login.body as { challengeToken: string };

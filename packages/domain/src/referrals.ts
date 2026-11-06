@@ -118,7 +118,10 @@ export function ageInYears(
   now: Date = new Date(),
 ): number | null {
   if (patient.dateOfBirth) {
-    return (now.getTime() - new Date(patient.dateOfBirth).getTime()) / (365.25 * 24 * 3600 * 1000);
+    const date =
+      patient.dateOfBirth instanceof Date ? patient.dateOfBirth : new Date(patient.dateOfBirth);
+    if (Number.isNaN(date.getTime())) return null;
+    return (now.getTime() - date.getTime()) / (365.25 * 24 * 3600 * 1000);
   }
   if (patient.estimatedAge == null || !patient.estimatedAgeUnit) return null;
   const divisor = { YEARS: 1, MONTHS: 12, DAYS: 365.25 }[patient.estimatedAgeUnit];

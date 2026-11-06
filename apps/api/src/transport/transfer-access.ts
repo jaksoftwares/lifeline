@@ -25,6 +25,8 @@ export interface TransferAccess {
   providerIds: string[];
   /** Assignments the viewer may confirm, decline, reassign, release or dispatch. */
   dispatchableAssignmentIds: string[];
+  canSignHandover: boolean;
+  canRecordCost: boolean;
   seesPatient: boolean;
   /** Sees every assignment, not just their own provider's. */
   seesAllAssignments: boolean;
@@ -70,6 +72,12 @@ export function transferAccess(auth: AuthContext, transfer: TransferScope): Tran
   const dispatchableAssignmentIds = transfer.assignments
     .filter((a) => a.providerId && hasPermission(own, 'dispatch:assign', at(a.providerId)))
     .map((a) => a.id);
+  const canSignHandover = hasPermission(
+    own,
+    'handover:sign',
+    at(transfer.destinationInstitutionId),
+  );
+  const canRecordCost = canArrange || dispatchableAssignmentIds.length > 0;
   const providerHasTrip = transfer.assignments.some(
     (a) =>
       a.providerId &&
@@ -84,6 +92,8 @@ export function transferAccess(auth: AuthContext, transfer: TransferScope): Tran
     networkView,
     providerIds,
     dispatchableAssignmentIds,
+    canSignHandover,
+    canRecordCost,
     seesPatient: facilityView || networkReferralView || providerHasTrip,
     seesAllAssignments,
     canViewReferral: facilityView || networkReferralView,

@@ -27,7 +27,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useCrew, useVehicles } from '@/lib/queries';
-import { useTransferInvalidation } from './transfer-panel';
+import { useTransferInvalidation } from './use-transfer-invalidation';
 
 type Mode = 'confirm' | 'decline' | 'reassign' | 'release' | null;
 

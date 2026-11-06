@@ -10,7 +10,7 @@ import { Alert, Button, Field, Input, Select } from '@lifeline/ui';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { useTransferInvalidation } from './transfer-panel';
+import { useTransferInvalidation } from './use-transfer-invalidation';
 
 /** Transport arranged by phone outside Lifeline, recorded so everyone sees how the patient travels. */
 export function ExternalTransportForm({

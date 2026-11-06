@@ -264,7 +264,9 @@ Automated (Playwright + Maestro) against seed data, run in CI:
 
 ## 9. Success metrics captured by the platform
 
-All timings are derived from `StatusEvent` timestamps, so no extra data entry is needed.
+Timings use persisted referral and transfer timestamps; vehicle utilisation uses the append-only
+vehicle availability timeline. Older vehicle availability changes cannot be reconstructed before
+that timeline was introduced.
 
 | Metric | Calculation |
 |---|---|
@@ -277,9 +279,9 @@ All timings are derived from `StatusEvent` timestamps, so no extra data entry is
 | Transfer duration | Patient collected → Arrived |
 | Handover completion rate | Transfers with signed handover ÷ arrived transfers |
 | Referral completion rate | Completed ÷ submitted |
-| Ambulance utilisation | Time on assignment ÷ time available |
+| Ambulance utilisation | Time on assignment overlapping recorded available-fleet time ÷ recorded available-fleet time |
 | Transfer cost | Sum and average of recorded costs |
-| Platform adoption | Active institutions and users per period |
+| Platform adoption | Currently active institutions with referral or transfer activity, and currently active users who signed in during the period |
 
 Targets such as "average response under 15 minutes" remain hypotheses until compared with the Phase 1 baseline.
 

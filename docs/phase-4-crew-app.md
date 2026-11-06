@@ -79,7 +79,7 @@ To try offline: put the phone in flight mode mid-trip, press a few steps, then t
 
 1. **Run on real Android phones**, including low-end ones common among county crews, and on iOS.
 2. **Push notifications** for new trips and changes (Phase 7).
-3. **Live map** of positions for facilities and operations, with stale-location warnings (Phase 5).
-4. **Handover** and completion, which free the vehicle (Phase 6).
-5. Dispatchers recording trip steps on the crew's behalf from the web, for crews without phones.
-6. Positions from a crew member removed from a trip are dropped, including fixes recorded before the change. Acceptable for now; revisit if it hides real movement.
+3. Dispatchers recording trip steps on the crew's behalf from the web, for crews without phones.
+4. Positions from a crew member removed from a trip are dropped, including fixes recorded before the change. Acceptable for now; revisit if it hides real movement.
+
+The live map and stale-location handling are covered in [Phase 5](phase-5-live-tracking.md). Receiving handover, completion and cost recording are covered in [Phase 6](phase-6-handover-costs.md).

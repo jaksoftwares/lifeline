@@ -1,6 +1,7 @@
 /**
  * Demo network for local development and end-to-end tests. Safe to run repeatedly.
- * All names are fictional. Never run against production.
+ * Facility names are real Nairobi hospitals; contacts and operational data are illustrative.
+ * Never run against production.
  */
 import { existsSync } from 'node:fs';
 import {
@@ -20,6 +21,7 @@ import {
   type VehicleStatus,
 } from '@prisma/client';
 import { hashPassword } from '../src/auth/passwords';
+import { createRoleNotifications } from '../src/notifications/notification-records';
 
 export const DEMO_NETWORK = { code: 'DEMO', name: 'Lifeline Demo Network' };
 
@@ -42,17 +44,16 @@ interface DemoInstitution {
   departments?: [string, string][];
 }
 
-// Coordinates place each fictional facility near a real town so distances are realistic.
-// Phone numbers use the unallocated +2547000001xx range.
+// Demo contacts use the unallocated +2547000001xx range.
 export const DEMO_INSTITUTIONS: DemoInstitution[] = [
   {
     code: 'DNRH',
-    name: 'Demo National Referral Hospital',
+    name: 'Kenyatta National Hospital (KNH)',
     type: 'FACILITY',
     level: 6,
     county: 'Nairobi',
     ownership: 'PUBLIC',
-    address: 'Demo Hospital Road, Nairobi',
+    address: 'Hospital Road, Nairobi',
     phone: '+254700000101',
     latitude: -1.301,
     longitude: 36.807,
@@ -81,15 +82,15 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
   },
   {
     code: 'DCRH-E',
-    name: 'Demo County Referral Hospital East',
+    name: 'Mama Lucy Kibaki Hospital',
     type: 'FACILITY',
     level: 5,
-    county: 'Machakos',
+    county: 'Nairobi',
     ownership: 'PUBLIC',
-    address: 'Demo Avenue, Machakos',
+    address: 'Umoja, Nairobi',
     phone: '+254700000121',
-    latitude: -1.518,
-    longitude: 37.264,
+    latitude: -1.2588,
+    longitude: 36.8942,
     services: [
       'EMERGENCY',
       'ICU',
@@ -121,15 +122,15 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
   },
   {
     code: 'DCRH-W',
-    name: 'Demo County Referral Hospital West',
+    name: 'Mbagathi County Hospital',
     type: 'FACILITY',
     level: 5,
-    county: 'Kiambu',
+    county: 'Nairobi',
     ownership: 'PUBLIC',
-    address: 'Demo Street, Kiambu',
+    address: 'Mbagathi Way, Nairobi',
     phone: '+254700000141',
-    latitude: -1.172,
-    longitude: 36.835,
+    latitude: -1.3037,
+    longitude: 36.8033,
     services: ['EMERGENCY', 'ICU', 'HDU', 'CEMONC', 'PAEDS', 'SURGERY', 'ORTHO', 'CT', 'BLOOD'],
     reportedMinutesAgo: 9 * 60,
     capacity: [
@@ -144,15 +145,15 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
   },
   {
     code: 'DSCH-N',
-    name: 'Demo Sub-County Hospital North',
+    name: 'Pumwani Maternity Hospital',
     type: 'FACILITY',
     level: 4,
-    county: 'Kiambu',
+    county: 'Nairobi',
     ownership: 'PUBLIC',
-    address: 'Demo Lane, Gatundu',
+    address: 'Pumwani, Nairobi',
     phone: '+254700000161',
-    latitude: -1.005,
-    longitude: 36.903,
+    latitude: -1.2794,
+    longitude: 36.8393,
     services: ['EMERGENCY', 'CEMONC', 'PAEDS', 'SURGERY', 'BLOOD'],
     reportedMinutesAgo: 40,
     capacity: [
@@ -168,15 +169,15 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
   },
   {
     code: 'DSCH-S',
-    name: 'Demo Sub-County Hospital South',
+    name: 'The Nairobi Hospital',
     type: 'FACILITY',
     level: 4,
-    county: 'Kajiado',
-    ownership: 'FAITH_BASED',
-    address: 'Demo Close, Kajiado',
+    county: 'Nairobi',
+    ownership: 'PRIVATE',
+    address: 'Argwings Kodhek Road, Nairobi',
     phone: '+254700000181',
-    latitude: -1.852,
-    longitude: 36.777,
+    latitude: -1.3006,
+    longitude: 36.8072,
     services: ['EMERGENCY', 'CEMONC', 'PAEDS', 'SURGERY', 'BLOOD'],
     reportedMinutesAgo: 120,
     capacity: [
@@ -495,7 +496,7 @@ async function seedFleet(
       where: { networkId_registration: { networkId, registration: v.registration } },
     });
     if (exists) continue;
-    await prisma.vehicle.create({
+    const vehicle = await prisma.vehicle.create({
       data: {
         networkId,
         institutionId: institutionIds.get(v.provider)!,
@@ -511,6 +512,14 @@ async function seedFleet(
         baseName: v.base?.[0] ?? null,
         baseLatitude: v.base?.[1] ?? null,
         baseLongitude: v.base?.[2] ?? null,
+      },
+    });
+    await prisma.vehicleStatusEvent.create({
+      data: {
+        vehicleId: vehicle.id,
+        status: vehicle.status,
+        recordStatus: vehicle.recordStatus,
+        recordedAt: vehicle.statusUpdatedAt ?? vehicle.createdAt,
       },
     });
   }
@@ -702,7 +711,14 @@ async function seedDemoReferral(
             scoreBand: score.band,
           },
         },
-        requests: { create: { institutionId: national, sentById: clinician.id, sentAt } },
+        requests: {
+          create: {
+            institutionId: national,
+            sentById: clinician.id,
+            sentAt,
+            escalationDueAt: new Date(sentAt.getTime() + seq.referralEscalationMinutes * 60_000),
+          },
+        },
       },
       include: { requests: true },
     });
@@ -726,6 +742,17 @@ async function seedDemoReferral(
         data: { referralId: referral.id, actorId: clinician.id, ...event },
       });
     }
+    await createRoleNotifications(tx, {
+      networkId,
+      institutionId: national,
+      roles: ['RECEIVING_DECISION_MAKER', 'REFERRAL_COORDINATOR'],
+      eventType: 'REFERRAL_SUBMITTED',
+      eventKey: `referral-request:${referral.requests[0]!.id}:submitted`,
+      title: 'New referral received',
+      message: `Referral ${referral.reference} is waiting for your facility’s response.`,
+      entityType: 'referral',
+      entityId: referral.id,
+    });
   });
 }
 

@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { type AuthContext, NOT_PERMITTED } from '../auth/auth-context';
 import { type RequestMeta } from '../common/request-meta';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { assertCanView } from './referral-access';
 import { recordReferralEvent } from './referral-records';
 import { ReferralsService } from './referrals.service';
@@ -29,6 +30,7 @@ export class ResponsesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly referrals: ReferralsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -151,6 +153,34 @@ export class ResponsesService {
         },
         tx,
       );
+      const notice = {
+        ACCEPT: {
+          eventType: 'REFERRAL_ACCEPTED',
+          title: 'Referral accepted',
+          message: `A receiving facility accepted referral ${referral.reference}.`,
+        },
+        DECLINE: {
+          eventType: 'REFERRAL_DECLINED',
+          title: 'Referral declined',
+          message: `A receiving facility declined referral ${referral.reference}.`,
+        },
+        REQUEST_INFO: {
+          eventType: 'REFERRAL_INFO_REQUESTED',
+          title: 'More information requested',
+          message: `A receiving facility requested more information for referral ${referral.reference}.`,
+        },
+      }[input.decision];
+      await this.notifications.notifyRoles(tx, {
+        networkId: referral.networkId,
+        institutionId: referral.referringInstitutionId,
+        roles: ['REFERRING_CLINICIAN', 'REFERRAL_COORDINATOR'],
+        eventType: notice.eventType,
+        eventKey: `referral-response:${requestId}:${now.toISOString()}`,
+        title: notice.title,
+        message: notice.message,
+        entityType: 'referral',
+        entityId: referral.id,
+      });
     });
   }
 
@@ -181,6 +211,22 @@ export class ResponsesService {
     }
 
     const answersQuestion = asReferrer && request.status === 'INFO_REQUESTED';
+    const now = new Date();
+    const escalationReset = answersQuestion
+      ? {
+          escalationDueAt: new Date(
+            now.getTime() +
+              (
+                await this.prisma.network.findUniqueOrThrow({
+                  where: { id: referral.networkId },
+                  select: { referralEscalationMinutes: true },
+                })
+              ).referralEscalationMinutes *
+                60_000,
+          ),
+          escalatedAt: null,
+        }
+      : undefined;
     await this.prisma.$transaction(async (tx) => {
       await tx.referralMessage.create({
         data: {
@@ -189,13 +235,16 @@ export class ResponsesService {
           body,
           authorId: auth.userId,
           authorInstitutionId: asReferrer ? referral.referringInstitutionId : request.institutionId,
+          createdAt: now,
         },
       });
-      if (answersQuestion) {
-        await tx.referralRequest.updateMany({
+      if (answersQuestion && escalationReset) {
+        const { count } = await tx.referralRequest.updateMany({
           where: { id: requestId, status: 'INFO_REQUESTED' },
-          data: { status: 'PENDING' },
+          data: { status: 'PENDING', ...escalationReset },
         });
+        if (count === 0)
+          throw new ConflictException('This information request has already been answered.');
         await recordReferralEvent(tx, {
           referralId: referral.id,
           type: 'INFO_PROVIDED',
@@ -219,6 +268,19 @@ export class ResponsesService {
         },
         tx,
       );
+      if (answersQuestion) {
+        await this.notifications.notifyRoles(tx, {
+          networkId: referral.networkId,
+          institutionId: request.institutionId,
+          roles: ['RECEIVING_DECISION_MAKER', 'REFERRAL_COORDINATOR'],
+          eventType: 'REFERRAL_INFO_PROVIDED',
+          eventKey: `referral-info-provided:${requestId}:${now.toISOString()}`,
+          title: 'Referral information received',
+          message: `The referring facility replied to your question for referral ${referral.reference}.`,
+          entityType: 'referral',
+          entityId: referral.id,
+        });
+      }
     });
   }
 

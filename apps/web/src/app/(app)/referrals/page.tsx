@@ -42,7 +42,7 @@ export default function ReferralsPage() {
     <>
       <PageHeader
         title="Referrals"
-        description="Patients being referred from your facility, and referrals sent to it."
+        description="Referrals sent by or to your facility."
         actions={
           can('referral:create') && (
             <Link

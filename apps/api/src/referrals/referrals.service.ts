@@ -29,6 +29,7 @@ import { type FieldError } from '../common/zod.pipe';
 import { type RequestMeta } from '../common/request-meta';
 import { toServiceView } from '../facilities/mappers';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   attachmentSelect,
   nextAction,
@@ -60,6 +61,7 @@ export class ReferralsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(
@@ -182,6 +184,10 @@ export class ReferralsService {
       });
     }
     await this.assertReceivingFacilities(institutionIds, referral);
+    const network = await this.prisma.network.findUniqueOrThrow({
+      where: { id: referral.networkId },
+      select: { referralEscalationMinutes: true },
+    });
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
@@ -201,9 +207,12 @@ export class ReferralsService {
         tx,
         auth,
         referral.id,
+        referral.networkId,
         referral.referringInstitutionId,
+        referral.reference,
         institutionIds,
         now,
+        network.referralEscalationMinutes,
       );
       await this.audit.record(
         {
@@ -248,15 +257,22 @@ export class ReferralsService {
       );
     }
     await this.assertReceivingFacilities(institutionIds, referral);
+    const network = await this.prisma.network.findUniqueOrThrow({
+      where: { id: referral.networkId },
+      select: { referralEscalationMinutes: true },
+    });
 
     await this.prisma.$transaction(async (tx) => {
       await this.createRequests(
         tx,
         auth,
         referral.id,
+        referral.networkId,
         referral.referringInstitutionId,
+        referral.reference,
         institutionIds,
         new Date(),
+        network.referralEscalationMinutes,
       );
       await this.audit.record(
         {
@@ -541,13 +557,22 @@ export class ReferralsService {
     tx: Prisma.TransactionClient,
     auth: AuthContext,
     referralId: string,
+    networkId: string,
     referringInstitutionId: string,
+    reference: string,
     institutionIds: string[],
     at: Date,
+    escalationMinutes: number,
   ) {
     for (const institutionId of institutionIds) {
       const request = await tx.referralRequest.create({
-        data: { referralId, institutionId, sentById: auth.userId, sentAt: at },
+        data: {
+          referralId,
+          institutionId,
+          sentById: auth.userId,
+          sentAt: at,
+          escalationDueAt: new Date(at.getTime() + escalationMinutes * 60_000),
+        },
       });
       await recordReferralEvent(tx, {
         referralId,
@@ -557,6 +582,17 @@ export class ReferralsService {
         requestId: request.id,
         metadata: { from: referringInstitutionId },
         at,
+      });
+      await this.notifications.notifyRoles(tx, {
+        networkId,
+        institutionId,
+        roles: ['RECEIVING_DECISION_MAKER', 'REFERRAL_COORDINATOR'],
+        eventType: 'REFERRAL_SUBMITTED',
+        eventKey: `referral-request:${request.id}:submitted`,
+        title: 'New referral received',
+        message: `Referral ${reference} is waiting for your facility’s response.`,
+        entityType: 'referral',
+        entityId: referralId,
       });
     }
   }

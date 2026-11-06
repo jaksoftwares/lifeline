@@ -312,6 +312,16 @@ describe('status updates sync correctly after an offline period (Phase 4 done-wh
       new Date(pickup.receivedAt).getTime() - new Date(pickup.occurredAt).getTime(),
     ).toBeGreaterThan(29 * 60_000);
     expect(crewEvents[3]!.note).toBe('Flat tyre, changing it');
+    const destinationNotifications = (
+      await east.get('/api/notifications').query({ networkId: ids.networkId })
+    ).body as { eventType: string; entityId: string }[];
+    expect(
+      destinationNotifications.some(
+        (notification) =>
+          notification.eventType === 'TRANSFER_ARRIVED' &&
+          notification.entityId === trip.transferId,
+      ),
+    ).toBe(true);
   });
 
   it('records nothing twice when the app retries after losing the response', async () => {

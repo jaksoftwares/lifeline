@@ -10,7 +10,7 @@ import {
 } from '@lifeline/domain';
 import { type AssignmentView, type TransferDetail } from '@lifeline/schemas';
 import { Alert, Button, Card, CardBody, CardHeader, Input, Loading } from '@lifeline/ui';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { ArrowRight, Phone } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import {
@@ -23,22 +23,11 @@ import { formatAgo, formatDateTime, formatMinutes } from '@/lib/format';
 import { useTransfer } from '@/lib/queries';
 import { DispatchPanel } from './dispatch-panel';
 import { ExternalTransportForm } from './external-transport-form';
+import { JourneySteps, Tracking } from './tracking';
 import { TransferHistory } from './transfer-history';
 import { VehiclePicker } from './vehicle-picker';
-
-/** Refreshes everything that shows this transfer after a change. */
-export function useTransferInvalidation(transfer: Pick<TransferDetail, 'id' | 'referral'>) {
-  const queryClient = useQueryClient();
-  return () => {
-    void queryClient.invalidateQueries({ queryKey: ['transfer', transfer.id] });
-    void queryClient.invalidateQueries({ queryKey: ['transfer-suggestions', transfer.id] });
-    void queryClient.invalidateQueries({ queryKey: ['transfers'] });
-    void queryClient.invalidateQueries({ queryKey: ['vehicles'] });
-    void queryClient.invalidateQueries({ queryKey: ['crew'] });
-    void queryClient.invalidateQueries({ queryKey: ['referral', transfer.referral.id] });
-    void queryClient.invalidateQueries({ queryKey: ['referrals'] });
-  };
-}
+import { HandoverCost } from './handover-cost';
+import { useTransferInvalidation } from './use-transfer-invalidation';
 
 export function TransferPanel({ transferId }: { transferId: string }) {
   const transfer = useTransfer(transferId);
@@ -73,6 +62,7 @@ function TransferView({ transfer: t }: { transfer: TransferDetail }) {
               {t.cancelReason}
             </Alert>
           )}
+          <JourneySteps transfer={t} />
           <Route transfer={t} />
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
             <Item label="Care needed on the way">
@@ -106,6 +96,8 @@ function TransferView({ transfer: t }: { transfer: TransferDetail }) {
         </CardBody>
       </Card>
 
+      <Tracking transfer={t} />
+
       {current && <CurrentAssignment transfer={t} assignment={current} />}
 
       {t.viewer.canArrange && t.status === 'AWAITING_TRANSPORT' && !current && (
@@ -113,6 +105,8 @@ function TransferView({ transfer: t }: { transfer: TransferDetail }) {
       )}
 
       {dispatchable && <DispatchPanel transfer={t} assignment={current} />}
+
+      <HandoverCost transfer={t} />
 
       {earlier.length > 0 && (
         <Card>

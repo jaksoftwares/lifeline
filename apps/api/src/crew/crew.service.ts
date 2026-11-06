@@ -20,6 +20,8 @@ import { type Institution, type Prisma, type TransferEventType } from '@prisma/c
 import { AuditService } from '../audit/audit.service';
 import { type AuthContext, NOT_PERMITTED } from '../auth/auth-context';
 import { type RequestMeta } from '../common/request-meta';
+import { LiveService } from '../live/live.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { patientAge, patientDisplayName } from '../referrals/mappers';
 import { isUniqueViolation, recordTransferEvent } from '../transport/transfer-records';
@@ -61,6 +63,8 @@ export class CrewService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly live: LiveService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async trips(auth: AuthContext): Promise<CrewTrip[]> {
@@ -205,6 +209,52 @@ export class CrewService {
           },
           tx,
         );
+        const message = `Referral ${transfer.referral.reference} is now ${TRANSFER_STATUS_LABELS[update.status].toLowerCase()}.`;
+        const eventType = `TRANSFER_${type}`;
+        await this.notifications.notifyRoles(tx, {
+          networkId: transfer.networkId,
+          institutionId: transfer.pickupInstitutionId,
+          roles: ['REFERRING_CLINICIAN', 'REFERRAL_COORDINATOR'],
+          eventType,
+          eventKey: `transfer-status:${clientId}:pickup`,
+          title: 'Transfer status updated',
+          message,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
+        await this.notifications.notifyRoles(tx, {
+          networkId: transfer.networkId,
+          institutionId: transfer.destinationInstitutionId,
+          roles: ['RECEIVING_DECISION_MAKER', 'REFERRAL_COORDINATOR'],
+          eventType,
+          eventKey: `transfer-status:${clientId}:destination`,
+          title: 'Transfer status updated',
+          message,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
+        await this.notifications.notifyRoles(tx, {
+          networkId: transfer.networkId,
+          institutionId: row.providerId,
+          roles: ['DISPATCHER', 'PROVIDER_ADMIN'],
+          eventType,
+          eventKey: `transfer-status:${clientId}:provider`,
+          title: 'Transfer status updated',
+          message,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
+        await this.notifications.notifyRoles(tx, {
+          networkId: transfer.networkId,
+          institutionId: null,
+          roles: ['NETWORK_OPERATIONS'],
+          eventType,
+          eventKey: `transfer-status:${clientId}:operations`,
+          title: 'Transfer status updated',
+          message,
+          entityType: 'transfer',
+          entityId: transfer.id,
+        });
         return true;
       });
       // Someone else changed the transfer between reading and writing; judge the press again.
@@ -213,6 +263,7 @@ export class CrewService {
       if (isUniqueViolation(error)) return this.applyStatus(auth, update, meta);
       throw error;
     }
+    void this.live.transferChanged(transfer.id);
     return { clientId, outcome: 'APPLIED', transferStatus: update.status };
   }
 
@@ -262,6 +313,7 @@ export class CrewService {
         skipDuplicates: true,
       });
       accepted += count;
+      if (count > 0) void this.live.positionReceived(row.transferId);
 
       const latest = valid.reduce((a, b) => (a.recordedAt > b.recordedAt ? a : b));
       if (row.vehicleId && row.status === 'CONFIRMED') {

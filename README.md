@@ -4,7 +4,8 @@ Healthcare referral and transfer coordination. Connected care. Coordinated trans
 
 - Product context: [problem-statement.md](docs/problem-statement.md)
 - Delivery plan: [docs/implementation-plan.md](docs/implementation-plan.md)
-- Phase records: [Phase 0 — foundations](docs/phase-0-foundations.md), [Phase 1 — facility network and capacity](docs/phase-1-facility-capacity.md), [Phase 2 — referrals](docs/phase-2-referrals.md), [Phase 3 — ambulances and dispatch](docs/phase-3-ambulances-dispatch.md), [Phase 4 — crew app](docs/phase-4-crew-app.md)
+- Phase records: [Phase 0 — foundations](docs/phase-0-foundations.md), [Phase 1 — facility network and capacity](docs/phase-1-facility-capacity.md), [Phase 2 — referrals](docs/phase-2-referrals.md), [Phase 3 — ambulances and dispatch](docs/phase-3-ambulances-dispatch.md), [Phase 4 — crew app](docs/phase-4-crew-app.md), [Phase 5 — live tracking](docs/phase-5-live-tracking.md), [Phase 6 — handover and costs](docs/phase-6-handover-costs.md), [Phase 7 — notifications and escalations](docs/phase-7-notifications.md), [Phase 8 — reports and administration](docs/phase-8-reports-admin.md)
+- Demo: [MVP presenter guide](docs/mvp-demo-guide.md)
 - Brand: [lifeline-brand-guidelines.md](docs/lifeline-brand-guidelines.md)
 
 ## Repository layout
@@ -50,17 +51,19 @@ pnpm dev
 
 ### Demo accounts
 
-All demo users share the password in `SEED_DEMO_PASSWORD` (default `Lifeline-Demo-2026`). Names and institutions are fictional.
+All demo users share the password in `SEED_DEMO_PASSWORD` (default `Lifeline-Demo-2026`). Facility names are real Nairobi hospitals; contacts, capacity, and referral data are illustrative and must not be used for care decisions.
+
+Email notifications use Postmark when `POSTMARK_SERVER_TOKEN` and `POSTMARK_FROM_EMAIL` are set in the API environment. SMS and push delivery remain unconfigured. Keep provider credentials in deployment secrets.
 
 | Email | Role | Where |
 |---|---|---|
-| clinician.north@demo.lifeline.test | Referring clinician | Demo Sub-County Hospital North |
-| coordinator.north@demo.lifeline.test | Referral coordinator | Demo Sub-County Hospital North |
-| admin.north@demo.lifeline.test | Facility administrator ¹ | Demo Sub-County Hospital North |
-| receiving.national@demo.lifeline.test | Receiving decision-maker | Demo National Referral Hospital |
-| admin.national@demo.lifeline.test | Facility administrator ¹ | Demo National Referral Hospital |
-| receiving.east@demo.lifeline.test | Receiving decision-maker | Demo County Referral Hospital East |
-| receiving.west@demo.lifeline.test | Receiving decision-maker | Demo County Referral Hospital West |
+| clinician.north@demo.lifeline.test | Referring clinician | Pumwani Maternity Hospital |
+| coordinator.north@demo.lifeline.test | Referral coordinator | Pumwani Maternity Hospital |
+| admin.north@demo.lifeline.test | Facility administrator ¹ | Pumwani Maternity Hospital |
+| receiving.national@demo.lifeline.test | Receiving decision-maker | Kenyatta National Hospital (KNH) |
+| admin.national@demo.lifeline.test | Facility administrator ¹ | Kenyatta National Hospital (KNH) |
+| receiving.east@demo.lifeline.test | Receiving decision-maker | Mama Lucy Kibaki Hospital |
+| receiving.west@demo.lifeline.test | Receiving decision-maker | Mbagathi County Hospital |
 | dispatcher@demo.lifeline.test | Dispatcher | Demo Ambulance Services |
 | dispatcher.county@demo.lifeline.test | Dispatcher | Demo County Ambulance Service |
 | crew@demo.lifeline.test | Ambulance crew | Demo Ambulance Services |
@@ -71,7 +74,7 @@ All demo users share the password in `SEED_DEMO_PASSWORD` (default `Lifeline-Dem
 
 ¹ Requires two-step verification. At first sign-in you'll be asked to scan a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, …).
 
-The seed also creates one emergency referral from North to the National hospital, so `receiving.national` has something to respond to, and one urgent referral already accepted by the East hospital, so `clinician.north` can arrange transport straight away. Two ambulance providers have vehicles in different states (available, out of service, off duty, availability out of date) and crew. Vehicle availability is relative to when the seed ran and goes out of date after 12 hours; dispatchers confirm it on the Fleet page. The demo network uses NEWS2; real networks start with no early-warning score until clinical governance approves one.
+The seed creates an emergency referral from Pumwani to KNH and an urgent referral accepted by Mama Lucy, ready for transport. Seeded clinical, capacity, contact, and vehicle data are illustrative. Vehicle availability expires after 12 hours; dispatchers can confirm it on the Fleet page. The demo network uses NEWS2; real networks start with no score until approved by clinical governance.
 
 ## Crew app
 

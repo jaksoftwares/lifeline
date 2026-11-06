@@ -66,7 +66,7 @@ export default function FleetPage() {
     <>
       <PageHeader
         title="Fleet"
-        description="Ambulances, their availability and their crews. Confirm availability at the start of every shift so vehicles keep being suggested."
+        description="Vehicles, availability and crews."
         actions={
           (seesAll || providers.length > 1) && (
             <Select
@@ -295,10 +295,7 @@ function AddVehicle({ providerId }: { providerId: string }) {
   }
   return (
     <Card>
-      <CardHeader
-        title="Register a vehicle"
-        description="New vehicles stay off duty until a dispatcher marks them available."
-      />
+      <CardHeader title="Register a vehicle" description="New vehicles start off duty." />
       <CardBody>
         <VehicleForm providerId={providerId} onDone={() => setOpen(false)} />
       </CardBody>
@@ -461,10 +458,7 @@ function Crew({ providerId, canManage }: { providerId: string; canManage: boolea
 
   return (
     <Card>
-      <CardHeader
-        title="Crew"
-        description="People who staff your ambulances. Dispatchers choose the crew for each trip."
-      />
+      <CardHeader title="Crew" description="Staff assigned to your ambulances." />
       <CardBody className="space-y-4">
         {crew.isPending && <Loading label="Loading crew…" />}
         {crew.isError && <Alert tone="critical" title={crew.error.message} />}
