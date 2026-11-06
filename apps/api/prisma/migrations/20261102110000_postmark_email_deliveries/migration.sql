@@ -1,4 +1,0 @@
-ALTER TYPE "NotificationDeliveryStatus" ADD VALUE 'PENDING' BEFORE 'DELIVERED';
-ALTER TYPE "NotificationDeliveryStatus" ADD VALUE 'SENDING' BEFORE 'DELIVERED';
-ALTER TYPE "NotificationDeliveryStatus" ADD VALUE 'SENT' BEFORE 'DELIVERED';
-ALTER TYPE "NotificationDeliveryStatus" ADD VALUE 'SKIPPED' AFTER 'FAILED';

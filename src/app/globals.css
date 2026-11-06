@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Afyaline brand: a calm clinical teal, with clear signal colours for urgency. */
+  --color-brand-50: #effaf8;
+  --color-brand-100: #d5f2ec;
+  --color-brand-200: #ade4da;
+  --color-brand-500: #14a38b;
+  --color-brand-600: #0d8a76;
+  --color-brand-700: #0c6f61;
+  --color-brand-800: #0d584e;
+  --color-brand-900: #0e4841;
+  --color-ink: #0f1f1d;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-slate-50 text-ink antialiased;
+}
+
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-brand-600;
+}

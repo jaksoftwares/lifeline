@@ -1,35 +1,46 @@
 {
-  "name": "lifeline",
+  "name": "afyaline",
+  "version": "0.1.0",
   "private": true,
-  "description": "Lifeline — healthcare referral and transfer coordination",
+  "description": "Afyaline: hospital-to-hospital patient transfer and ambulance coordination",
   "packageManager": "pnpm@11.9.0",
-  "engines": {
-    "node": ">=24"
-  },
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
-    "infra:down": "docker compose -f infra/docker-compose.yml down",
-    "db:migrate": "pnpm --filter @lifeline/api db:migrate",
-    "db:seed": "pnpm --filter @lifeline/api db:seed",
-    "db:reset": "pnpm --filter @lifeline/api db:reset",
-    "test:e2e": "pnpm --filter @lifeline/api test:e2e"
+    "db:link": "node scripts/db.mjs link",
+    "db:push": "node scripts/db.mjs push",
+    "db:seed": "node scripts/db.mjs seed",
+    "db:new": "supabase migration new",
+    "db:types": "supabase gen types typescript --linked --schema public > src/lib/database.types.ts"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.68.0",
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-leaflet": "^5.0.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
-    "@next/eslint-plugin-next": "15.5.28",
-    "eslint": "9.39.5",
-    "eslint-plugin-react-hooks": "5.2.0",
-    "globals": "16.5.0",
-    "prettier": "3.9.10",
-    "turbo": "2.11.10",
-    "typescript": "5.9.3",
-    "typescript-eslint": "8.72.1"
+    "@tailwindcss/postcss": "^4.3.4",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^10.14.0",
+    "eslint-config-next": "^16.4.5",
+    "postcss": "^8.5.32",
+    "prettier": "^3.9.10",
+    "supabase": "^3.0.0",
+    "tailwindcss": "^4.3.4",
+    "typescript": "^6.0.3"
   }
 }
